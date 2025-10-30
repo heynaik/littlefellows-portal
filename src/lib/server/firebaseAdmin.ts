@@ -4,8 +4,12 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
 function getPrivateKey() {
-  const key = process.env.FIREBASE_PRIVATE_KEY || '';
-  return key.replace(/\\n/g, '\n');
+  const raw = process.env.FIREBASE_PRIVATE_KEY || '';
+  const replaced = raw.replace(/\\n/g, '\n');
+  if (replaced.startsWith('"') && replaced.endsWith('"')) {
+    return replaced.slice(1, -1);
+  }
+  return replaced;
 }
 
 function assertEnv(name: string, value: string | undefined) {

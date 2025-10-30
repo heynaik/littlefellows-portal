@@ -28,6 +28,7 @@ function buildCredential() {
     clientEmail,
     privateKeyPresent: !!privateKey,
     privateKeyLength: privateKey?.length ?? 0,
+    keys: Object.keys(process.env).filter((key) => key.includes('FIREBASE')),
   });
 
   assertEnv('FIREBASE_PROJECT_ID', projectId);

@@ -1,26 +1,60 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Light tokens */
+:root{
+  --bg: 248 250 252;        /* slate-50-ish */
+  --panel: 255 255 255;     /* white */
+  --text: 15 23 42;         /* slate-900 */
+  --subtle: 100 116 139;    /* slate-500 */
+  --ring: 99 102 241;       /* indigo-500 */
+  --muted: 241 245 249;     /* slate-100 */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Base */
+html,body,#__next{height:100%}
+body{
+  background-color: rgb(var(--bg));
+  color: rgb(var(--text));
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, Noto Sans, "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol";
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Primitives (no weird utilities, only standard ones) */
+.card{
+  @apply rounded-xl bg-white shadow-sm ring-1 ring-black/5;
 }
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.section-title{
+  @apply text-lg font-semibold text-slate-900;
+}
+.subtle{
+  @apply text-sm text-slate-500;
+}
+.btn{
+  @apply inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition;
+}
+.btn-ghost{
+  @apply inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100;
+}
+.btn-primary{
+  @apply inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500;
+}
+.input{
+  @apply w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm outline-none focus:ring-2 ring-indigo-500;
+}
+.select{
+  @apply w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm outline-none focus:ring-2 ring-indigo-500;
+}
+.textarea{
+  @apply w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm outline-none focus:ring-2 ring-indigo-500 min-h-[96px];
+}
+.table{
+  @apply w-full text-sm;
+}
+.table th{
+  @apply text-left font-medium text-slate-500;
+}
+.table td{
+  @apply text-slate-700;
+}
+.row{
+  @apply grid grid-cols-[180px_1fr_120px_140px_1fr] items-center gap-4;
 }

@@ -23,14 +23,12 @@ function buildCredential() {
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = getPrivateKey();
 
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('[firebaseAdmin] env summary', {
-      projectId,
-      clientEmail,
-      privateKeyPresent: !!privateKey,
-      privateKeyLength: privateKey?.length ?? 0,
-    });
-  }
+  console.log('[firebaseAdmin] env summary', {
+    projectId,
+    clientEmail,
+    privateKeyPresent: !!privateKey,
+    privateKeyLength: privateKey?.length ?? 0,
+  });
 
   assertEnv('FIREBASE_PROJECT_ID', projectId);
   assertEnv('FIREBASE_CLIENT_EMAIL', clientEmail);

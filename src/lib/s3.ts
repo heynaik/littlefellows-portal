@@ -4,17 +4,19 @@ import { S3Client, PutObjectCommand, ListObjectsV2Command, GetObjectCommand } fr
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const BUCKET = process.env.S3_BUCKET!;
-const REGION = process.env.AWS_REGION!;
+const REGION = process.env.S3_REGION!;
+const ACCESS_KEY = process.env.S3_ACCESS_KEY_ID;
+const SECRET_KEY = process.env.S3_SECRET_ACCESS_KEY;
 
 if (!BUCKET || !REGION) {
-  throw new Error("S3_BUCKET and AWS_REGION must be set in .env.local");
+  throw new Error("S3_BUCKET and S3_REGION must be set in environment variables");
 }
 
 export const s3 = new S3Client({
   region: REGION,
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+    accessKeyId: ACCESS_KEY || "",
+    secretAccessKey: SECRET_KEY || "",
   },
 });
 

@@ -7,36 +7,37 @@ frontend:
     build:
       commands:
         - rm -f .env.production
-        - python - <<'PY'
-import os
+        - |
+          python - <<'PY'
+          import os
 
-def write_env(keys):
-    with open(".env.production", "w") as f:
-        for key in keys:
-            value = os.environ.get(key)
-            if value is None:
-                continue
-            escaped = value.replace("\\", "\\\\").replace("\n", "\\n")
-            f.write(f'{key}="{escaped}"\n')
+          def write_env(keys):
+              with open(".env.production", "w") as f:
+                  for key in keys:
+                      value = os.environ.get(key)
+                      if value is None:
+                          continue
+                      escaped = value.replace("\\", "\\\\").replace("\n", "\\n")
+                      f.write(f'{key}="{escaped}"\n')
 
-write_env(
-    [
-        "FIREBASE_PROJECT_ID",
-        "FIREBASE_CLIENT_EMAIL",
-        "FIREBASE_PRIVATE_KEY",
-        "FIREBASE_PRIVATE_KEY_BASE64",
-        "FIREBASE_SERVICE_ACCOUNT",
-        "FIREBASE_SERVICE_ACCOUNT_JSON",
-        "FIREBASE_SERVICE_ACCOUNT_BASE64",
-        "FIREBASE_ADMIN_CREDENTIALS",
-        "FIREBASE_ADMIN_PRIVATE_KEY",
-        "S3_BUCKET",
-        "S3_REGION",
-        "S3_ACCESS_KEY_ID",
-        "S3_SECRET_ACCESS_KEY",
-    ]
-)
-PY
+          write_env(
+              [
+                  "FIREBASE_PROJECT_ID",
+                  "FIREBASE_CLIENT_EMAIL",
+                  "FIREBASE_PRIVATE_KEY",
+                  "FIREBASE_PRIVATE_KEY_BASE64",
+                  "FIREBASE_SERVICE_ACCOUNT",
+                  "FIREBASE_SERVICE_ACCOUNT_JSON",
+                  "FIREBASE_SERVICE_ACCOUNT_BASE64",
+                  "FIREBASE_ADMIN_CREDENTIALS",
+                  "FIREBASE_ADMIN_PRIVATE_KEY",
+                  "S3_BUCKET",
+                  "S3_REGION",
+                  "S3_ACCESS_KEY_ID",
+                  "S3_SECRET_ACCESS_KEY",
+              ]
+          )
+          PY
         - npm run build
   artifacts:
     baseDirectory: .next

@@ -262,7 +262,7 @@ export async function DELETE(req: Request) {
     }
 
     await adminDb.collection("orders").doc(id).delete();
-    return NextResponse.json({}, { status: 204 });
+    return new NextResponse(null, { status: 204 });
   } catch (error) {
     console.error("[orders.DELETE]", error);
     return NextResponse.json({ message: "Failed to delete order" }, { status: 500 });

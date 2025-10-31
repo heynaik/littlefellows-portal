@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { changeStage, deleteOrder, getOrders, getVendors, previewHref } from '@/lib/api';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { changeStage, deleteOrder, getOrders, getVendors, previewHref } from "@/lib/api";
 import type { Vendor } from '@/lib/api';
 import type { Order, Stage } from '@/lib/types';
 import { STAGES } from '@/lib/types';
@@ -41,6 +41,36 @@ export default function AdminOrdersPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [vendorLoadError, setVendorLoadError] = useState<string | null>(null);
+  const ordersSignatureRef = useRef<string>("");
+
+  const computeSignature = useCallback((list: Order[]) => {
+    return JSON.stringify(
+      list
+        .map((order) => ({
+          id: order.id ?? "",
+          updatedAt: order.updatedAt ?? 0,
+          stage: order.stage ?? "",
+          vendorId: order.vendorId ?? "",
+          s3Key: order.s3Key ?? "",
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id))
+    );
+  }, []);
+
+  const setOrdersWithSignature = useCallback(
+    (updater: (prev: Order[]) => Order[]) => {
+      setOrders((prev) => {
+        const next = updater(prev);
+        const signature = computeSignature(next);
+        if (ordersSignatureRef.current === signature) {
+          return prev;
+        }
+        ordersSignatureRef.current = signature;
+        return next;
+      });
+    },
+    [computeSignature]
+  );
 
   const refresh = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!silent) {
@@ -49,7 +79,7 @@ export default function AdminOrdersPage() {
     }
     try {
       const data = await getOrders();
-      setOrders(data);
+      setOrdersWithSignature(() => data);
       setError(null);
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load orders'));
@@ -58,7 +88,7 @@ export default function AdminOrdersPage() {
         setLoading(false);
       }
     }
-  }, []);
+  }, [setOrdersWithSignature]);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,6 +198,17 @@ export default function AdminOrdersPage() {
     try {
       setUpdatingId(order.id);
       await changeStage(order.id, nextStage);
+      setOrdersWithSignature((prev) =>
+        prev.map((existing) =>
+          existing.id === order.id
+            ? {
+                ...existing,
+                stage: nextStage,
+                updatedAt: Date.now(),
+              }
+            : existing
+        )
+      );
       await refresh({ silent: true });
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to update stage'));
@@ -408,8 +449,9 @@ export default function AdminOrdersPage() {
       {showCreate && (
         <CreateOrderModal
           onClose={() => setShowCreate(false)}
-          onCreated={async () => {
+          onCreated={async (created) => {
             setShowCreate(false);
+            setOrdersWithSignature((prev) => [created, ...prev]);
             await refresh({ silent: true });
           }}
         />
@@ -419,8 +461,13 @@ export default function AdminOrdersPage() {
         <EditOrderModal
           order={editing}
           onClose={() => setEditing(null)}
-          onUpdated={async () => {
+          onUpdated={async (updated) => {
             setEditing(null);
+            setOrdersWithSignature((prev) =>
+              prev.map((existing) =>
+                existing.id === updated.id ? { ...existing, ...updated } : existing
+              )
+            );
             await refresh({ silent: true });
           }}
         />
@@ -436,6 +483,9 @@ export default function AdminOrdersPage() {
             try {
               await deleteOrder(deleting.id);
               setDeleting(null);
+              setOrdersWithSignature((prev) =>
+                prev.filter((existing) => existing.id !== deleting.id)
+              );
               await refresh({ silent: true });
             } catch (err) {
               setError(getErrorMessage(err, 'Failed to delete order'));

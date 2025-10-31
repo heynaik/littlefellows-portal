@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { changeStage, getOrders, previewHref } from "@/lib/api";
 import type { Order, Stage } from "@/lib/types";
 import StageBadge from "@/components/StageBadge";
@@ -37,6 +37,35 @@ export default function VendorOrdersPage() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<StageFilter>("All");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const ordersSignatureRef = useRef<string>("");
+
+  const computeSignature = useCallback((list: Order[]) => {
+    return JSON.stringify(
+      list
+        .map((order) => ({
+          id: order.id ?? "",
+          updatedAt: order.updatedAt ?? 0,
+          stage: order.stage ?? "",
+          vendorId: order.vendorId ?? "",
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id))
+    );
+  }, []);
+
+  const setOrdersWithSignature = useCallback(
+    (updater: (prev: Order[]) => Order[]) => {
+      setOrders((prev) => {
+        const next = updater(prev);
+        const signature = computeSignature(next);
+        if (ordersSignatureRef.current === signature) {
+          return prev;
+        }
+        ordersSignatureRef.current = signature;
+        return next;
+      });
+    },
+    [computeSignature]
+  );
 
   const refresh = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!silent) {
@@ -45,7 +74,7 @@ export default function VendorOrdersPage() {
     }
     try {
       const data = await getOrders();
-      setOrders(data);
+      setOrdersWithSignature(() => data);
       setErr(null);
     } catch (error) {
       setErr(getErrorMessage(error, "Failed to load orders"));
@@ -54,7 +83,7 @@ export default function VendorOrdersPage() {
         setLoading(false);
       }
     }
-  }, []);
+  }, [setOrdersWithSignature]);
 
   useEffect(() => {
     let cancelled = false;
@@ -116,6 +145,13 @@ export default function VendorOrdersPage() {
     try {
       setUpdatingId(order.id);
       await changeStage(order.id, nextStage);
+      setOrdersWithSignature((prev) =>
+        prev.map((existing) =>
+          existing.id === order.id
+            ? { ...existing, stage: nextStage, updatedAt: Date.now() }
+            : existing
+        )
+      );
       await refresh({ silent: true });
     } catch (error) {
       setErr(getErrorMessage(error, "Failed to update stage"));

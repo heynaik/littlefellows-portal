@@ -20,7 +20,7 @@ export default function EditOrderModal({
 }: {
   order: Order;
   onClose: () => void;
-  onUpdated: () => void;
+  onUpdated: (order: Order) => void;
 }) {
   const [bookTitle, setBookTitle] = useState(order.bookTitle);
   const [binding, setBinding] = useState<Binding>(order.binding);
@@ -64,14 +64,14 @@ export default function EditOrderModal({
     setErr(null);
     try {
       const nextKey = await uploadIfRequired();
-      await updateOrder(order.id, {
+      const updated = await updateOrder(order.id, {
         bookTitle,
         binding,
         deadline,
         notes,
         s3Key: nextKey,
       });
-      onUpdated();
+      onUpdated(updated);
     } catch (error) {
       setErr(getErrorMessage(error, 'Failed to update order'));
     } finally {
@@ -104,8 +104,8 @@ export default function EditOrderModal({
                     if (!order.id) return;
                     setBusy(true);
                     try {
-                      await updateOrder(order.id, { vendorId: null });
-                      onUpdated();
+                      const updated = await updateOrder(order.id, { vendorId: null });
+                      onUpdated(updated);
                     } catch (e) {
                       setErr(getErrorMessage(e, 'Failed to unassign vendor'));
                     } finally {
@@ -230,8 +230,8 @@ export default function EditOrderModal({
           if (!order.id) return;
           setBusy(true);
           try {
-            await updateOrder(order.id, { vendorId });
-            onUpdated();
+            const updated = await updateOrder(order.id, { vendorId });
+            onUpdated(updated);
           } catch (e) {
             setErr(getErrorMessage(e, 'Failed to assign vendor'));
           } finally {

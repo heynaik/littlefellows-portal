@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { changeStage, getOrders, previewHref } from "@/lib/api";
 import type { Order, Stage } from "@/lib/types";
 import StageBadge from "@/components/StageBadge";
@@ -38,22 +38,50 @@ export default function VendorOrdersPage() {
   const [stageFilter, setStageFilter] = useState<StageFilter>("All");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  async function refresh() {
-    setLoading(true);
-    setErr(null);
+  const refresh = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setErr(null);
+    }
     try {
       const data = await getOrders();
       setOrders(data);
+      setErr(null);
     } catch (error) {
       setErr(getErrorMessage(error, "Failed to load orders"));
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
-  }
+  }, []);
 
   useEffect(() => {
-    refresh();
-  }, []);
+    let cancelled = false;
+    let inflight = false;
+
+    const tick = async (opts?: { silent?: boolean }) => {
+      if (cancelled || inflight) return;
+      inflight = true;
+      try {
+        await refresh(opts);
+      } finally {
+        inflight = false;
+      }
+    };
+
+    tick();
+    const interval = setInterval(() => tick({ silent: true }), 8000);
+    const handleVisibility = () => {
+      if (!document.hidden) tick({ silent: true });
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [refresh]);
 
   const [tab, setTab] = useState<'newOrders' | 'orders'>('newOrders');
 
@@ -88,7 +116,7 @@ export default function VendorOrdersPage() {
     try {
       setUpdatingId(order.id);
       await changeStage(order.id, nextStage);
-      await refresh();
+      await refresh({ silent: true });
     } catch (error) {
       setErr(getErrorMessage(error, "Failed to update stage"));
     } finally {

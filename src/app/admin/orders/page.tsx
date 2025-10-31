@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { changeStage, deleteOrder, getOrders, getVendors, previewHref } from '@/lib/api';
 import type { Vendor } from '@/lib/api';
 import type { Order, Stage } from '@/lib/types';
@@ -42,22 +42,53 @@ export default function AdminOrdersPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [vendorLoadError, setVendorLoadError] = useState<string | null>(null);
 
-  async function refresh() {
-    setLoading(true);
-    setError(null);
+  const refresh = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const data = await getOrders();
       setOrders(data);
+      setError(null);
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load orders'));
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
-  }
+  }, []);
 
   useEffect(() => {
-    refresh();
-  }, []);
+    let cancelled = false;
+    let inflight = false;
+
+    const tick = async (opts?: { silent?: boolean }) => {
+      if (cancelled || inflight) return;
+      inflight = true;
+      try {
+        await refresh(opts);
+      } finally {
+        inflight = false;
+      }
+    };
+
+    tick();
+
+    const interval = setInterval(() => tick({ silent: true }), 8000);
+    const handleVisibility = () => {
+      if (!document.hidden) tick({ silent: true });
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [refresh]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,7 +168,7 @@ export default function AdminOrdersPage() {
     try {
       setUpdatingId(order.id);
       await changeStage(order.id, nextStage);
-      await refresh();
+      await refresh({ silent: true });
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to update stage'));
     } finally {
@@ -164,7 +195,7 @@ export default function AdminOrdersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="btn-ghost" onClick={refresh}>
+          <button className="btn-ghost" onClick={() => refresh()}>
             Refresh
           </button>
           <button className="btn-primary" onClick={() => setShowCreate(true)}>
@@ -377,9 +408,9 @@ export default function AdminOrdersPage() {
       {showCreate && (
         <CreateOrderModal
           onClose={() => setShowCreate(false)}
-          onCreated={() => {
+          onCreated={async () => {
             setShowCreate(false);
-            refresh();
+            await refresh({ silent: true });
           }}
         />
       )}
@@ -388,9 +419,9 @@ export default function AdminOrdersPage() {
         <EditOrderModal
           order={editing}
           onClose={() => setEditing(null)}
-          onUpdated={() => {
+          onUpdated={async () => {
             setEditing(null);
-            refresh();
+            await refresh({ silent: true });
           }}
         />
       )}
@@ -405,7 +436,7 @@ export default function AdminOrdersPage() {
             try {
               await deleteOrder(deleting.id);
               setDeleting(null);
-              refresh();
+              await refresh({ silent: true });
             } catch (err) {
               setError(getErrorMessage(err, 'Failed to delete order'));
             }

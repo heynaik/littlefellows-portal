@@ -40,6 +40,7 @@ export default function AdminOrdersPage() {
   const [deleting, setDeleting] = useState<Order | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [vendorsLoading, setVendorsLoading] = useState(false);
   const [vendorLoadError, setVendorLoadError] = useState<string | null>(null);
   const ordersSignatureRef = useRef<string>("");
 
@@ -120,26 +121,23 @@ export default function AdminOrdersPage() {
     };
   }, [refresh]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function loadVendors() {
-      try {
-        const list = await getVendors();
-        if (!cancelled) {
-          setVendors(list);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setVendorLoadError(getErrorMessage(err, 'Failed to load vendors'));
-          console.error('[AdminOrdersPage] getVendors', err);
-        }
-      }
+  const refreshVendors = useCallback(async () => {
+    setVendorsLoading(true);
+    setVendorLoadError(null);
+    try {
+      const list = await getVendors();
+      setVendors(list);
+    } catch (err) {
+      setVendorLoadError(getErrorMessage(err, "Failed to load vendors"));
+      console.error("[AdminOrdersPage] getVendors", err);
+    } finally {
+      setVendorsLoading(false);
     }
-    loadVendors();
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    refreshVendors();
+  }, [refreshVendors]);
 
   const vendorLookup = useMemo(() => {
     const lookup = new Map<string, Vendor>();
@@ -449,6 +447,10 @@ export default function AdminOrdersPage() {
       {showCreate && (
         <CreateOrderModal
           onClose={() => setShowCreate(false)}
+          vendors={vendors}
+          vendorsLoading={vendorsLoading}
+          vendorError={vendorLoadError}
+          onEnsureVendors={refreshVendors}
           onCreated={async (created) => {
             setShowCreate(false);
             setOrdersWithSignature((prev) => [created, ...prev]);
@@ -461,6 +463,10 @@ export default function AdminOrdersPage() {
         <EditOrderModal
           order={editing}
           onClose={() => setEditing(null)}
+          vendors={vendors}
+          vendorsLoading={vendorsLoading}
+          vendorError={vendorLoadError}
+          onEnsureVendors={refreshVendors}
           onUpdated={async (updated) => {
             setEditing(null);
             setOrdersWithSignature((prev) =>

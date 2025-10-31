@@ -1,9 +1,10 @@
-'use client';
+"use client";
 
-import { useState, type ChangeEvent, type FormEvent } from 'react';
-import type { Order } from '@/lib/types';
-import { getUploadUrl, previewHref, updateOrder } from '@/lib/api';
-import AssignVendorModal from './AssignVendorModal';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import type { Order } from "@/lib/types";
+import { getUploadUrl, previewHref, updateOrder } from "@/lib/api";
+import AssignVendorModal from "./AssignVendorModal";
+import type { Vendor } from "@/lib/api";
 
 type Binding = 'Soft' | 'Hard';
 
@@ -17,10 +18,18 @@ export default function EditOrderModal({
   order,
   onClose,
   onUpdated,
+  vendors,
+  vendorsLoading,
+  vendorError,
+  onEnsureVendors,
 }: {
   order: Order;
   onClose: () => void;
   onUpdated: (order: Order) => void;
+  vendors: Vendor[];
+  vendorsLoading: boolean;
+  vendorError: string | null;
+  onEnsureVendors?: () => Promise<void> | void;
 }) {
   const [bookTitle, setBookTitle] = useState(order.bookTitle);
   const [binding, setBinding] = useState<Binding>(order.binding);
@@ -31,6 +40,14 @@ export default function EditOrderModal({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
+  const hasRequestedVendors = useRef(false);
+
+  useEffect(() => {
+    if (!hasRequestedVendors.current && vendors.length === 0 && !vendorsLoading) {
+      hasRequestedVendors.current = true;
+      onEnsureVendors?.();
+    }
+  }, [vendors.length, vendorsLoading, onEnsureVendors]);
 
   const existingFileName = order.s3Key ? order.s3Key.split('/').pop() ?? 'Current PDF' : null;
 
@@ -226,6 +243,10 @@ export default function EditOrderModal({
       <AssignVendorModal
         open={assignOpen}
         onClose={() => setAssignOpen(false)}
+        vendors={vendors}
+        loading={vendorsLoading}
+        error={vendorError}
+        onEnsureVendors={onEnsureVendors}
         onSelect={async (vendorId) => {
           if (!order.id) return;
           setBusy(true);

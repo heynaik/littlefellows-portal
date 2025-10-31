@@ -1,26 +1,35 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { getUploadUrl, createOrder, getVendors } from '@/lib/api';
-import type { Order } from '@/lib/types';
-import type { Vendor } from '@/lib/api';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { getUploadUrl, createOrder } from "@/lib/api";
+import type { Order } from "@/lib/types";
+import type { Vendor } from "@/lib/api";
 
 type Props = {
   onClose: () => void;
   onCreated: (o: Order) => void; // tell parent to refresh
+  vendors: Vendor[];
+  vendorsLoading: boolean;
+  vendorError: string | null;
+  onEnsureVendors?: () => Promise<void> | void;
 };
 
-export default function CreateOrderModal({ onClose, onCreated }: Props) {
-  const [orderId, setOrderId] = useState('');
-  const [bookTitle, setBookTitle] = useState('');
-  const [binding, setBinding] = useState<'Soft' | 'Hard'>('Soft');
+export default function CreateOrderModal({
+  onClose,
+  onCreated,
+  vendors,
+  vendorsLoading,
+  vendorError,
+  onEnsureVendors,
+}: Props) {
+  const [orderId, setOrderId] = useState("");
+  const [bookTitle, setBookTitle] = useState("");
+  const [binding, setBinding] = useState<"Soft" | "Hard">("Soft");
   const [deadline, setDeadline] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [vendorId, setVendorId] = useState('');
-  const [loadingVendors, setLoadingVendors] = useState(false);
-  const [vendorErr, setVendorErr] = useState<string | null>(null);
+  const [vendorId, setVendorId] = useState("");
+  const ensureRequested = useRef(false);
 
   const canSubmit = useMemo(
     () => orderId.trim() && bookTitle.trim() && deadline.trim(),
@@ -31,32 +40,11 @@ export default function CreateOrderModal({ onClose, onCreated }: Props) {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    async function loadVendors() {
-      setLoadingVendors(true);
-      setVendorErr(null);
-      try {
-        const list = await getVendors();
-        if (!cancelled) {
-          setVendors(list);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setVendorErr('Failed to load vendors');
-          console.error('[CreateOrderModal] getVendors', error);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingVendors(false);
-        }
-      }
+    if (vendors.length === 0 && !vendorsLoading && !ensureRequested.current) {
+      ensureRequested.current = true;
+      onEnsureVendors?.();
     }
-
-    loadVendors();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [vendors.length, vendorsLoading, onEnsureVendors]);
 
   function getErrorMessage(error: unknown) {
     if (error instanceof Error) return error.message;
@@ -178,8 +166,8 @@ export default function CreateOrderModal({ onClose, onCreated }: Props) {
             <select
               className="w-full rounded-md border px-3 py-2"
               value={vendorId}
-              onChange={e => setVendorId(e.target.value)}
-              disabled={loadingVendors}
+              onChange={(e) => setVendorId(e.target.value)}
+              disabled={vendorsLoading}
             >
               <option value="">Unassigned</option>
               {vendors.map((vendor) => (
@@ -188,8 +176,8 @@ export default function CreateOrderModal({ onClose, onCreated }: Props) {
                 </option>
               ))}
             </select>
-            {vendorErr && (
-              <p className="mt-1 text-xs text-red-600">{vendorErr}</p>
+            {vendorError && (
+              <p className="mt-1 text-xs text-red-600">{vendorError}</p>
             )}
           </div>
 

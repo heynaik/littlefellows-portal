@@ -3,6 +3,11 @@ frontend:
   phases:
     preBuild:
       commands:
+        - echo "WOOCOMMERCE_SITE_URL=$WOOCOMMERCE_SITE_URL" >> .env.production
+        - echo "WOOCOMMERCE_CONSUMER_KEY=$WOOCOMMERCE_CONSUMER_KEY" >> .env.production
+        - echo "WOOCOMMERCE_CONSUMER_SECRET=$WOOCOMMERCE_CONSUMER_SECRET" >> .env.production
+        - echo "NEXT_PUBLIC_ADMIN_SECRET=$NEXT_PUBLIC_ADMIN_SECRET" >> .env.production
+        - echo "NEXT_PUBLIC_VENDOR_SECRET=$NEXT_PUBLIC_VENDOR_SECRET" >> .env.production
         - npm ci
     build:
       commands:

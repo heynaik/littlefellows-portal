@@ -40,7 +40,12 @@ export async function requireAdmin(req: Request): Promise<ServerUser | NextRespo
 }
 
 export async function requireUser(req: Request): Promise<ServerUser | NextResponse> {
+  // 1. Check if Firebase is even running
+  if (!adminAuth && process.env.NODE_ENV !== 'development') {
+    return NextResponse.json({ message: 'Server Error: Firebase Admin not initialized. Check Environment Variables.' }, { status: 500 });
+  }
+
   const user = await getUserFromRequest(req);
-  if (!user) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  if (!user) return NextResponse.json({ message: 'Unauthorized: Invalid Token or Session Expired' }, { status: 401 });
   return user;
 }

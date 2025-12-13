@@ -1,5 +1,7 @@
 "use client";
 
+import { useAuthUser } from "@/lib/auth";
+
 import { useEffect, useState } from "react";
 import type { Product } from "@/lib/types";
 import { Search } from "lucide-react";
@@ -12,7 +14,9 @@ export default function AdminProductsPage() {
     const [error, setError] = useState<string | null>(null);
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
+
     const [totalPages, setTotalPages] = useState(1);
+    const { user } = useAuthUser();
 
     const fetchProducts = async (pageToFetch = 1, searchQuery = "") => {
         setLoading(true);
@@ -23,7 +27,12 @@ export default function AdminProductsPage() {
                 per_page: "20",
                 search: searchQuery,
             });
-            const res = await fetch(`/api/products?${p.toString()}`);
+            const token = user ? await user.getIdToken() : "";
+            const res = await fetch(`/api/products?${p.toString()}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
             if (!res.ok) throw new Error("Failed to load products");
             const data = await res.json();
             setProducts(data.products);
@@ -36,8 +45,10 @@ export default function AdminProductsPage() {
     };
 
     useEffect(() => {
-        fetchProducts(page, search);
-    }, [page]); // Search needs manual trigger or debounce
+        if (user) {
+            fetchProducts(page, search);
+        }
+    }, [page, user]); // Search needs manual trigger or debounce
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();

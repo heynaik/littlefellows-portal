@@ -1,5 +1,7 @@
 "use client";
 
+import { useAuthUser } from "@/lib/auth";
+
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import {
@@ -74,7 +76,9 @@ export default function WooOrdersPage() {
     const [selectedOrder, setSelectedOrder] = useState<WooCommerceOrder | null>(null);
     const [assigningOrder, setAssigningOrder] = useState<WooCommerceOrder | null>(null);
     const [whatsappMsg, setWhatsappMsg] = useState("");
+
     const [downloadingZip, setDownloadingZip] = useState(false);
+    const { user } = useAuthUser();
 
 
 
@@ -87,7 +91,12 @@ export default function WooOrdersPage() {
                 per_page: "20",
                 search: search,
             });
-            const res = await fetch(`/api/woo-orders?${p.toString()}`);
+            const token = user ? await user.getIdToken() : "";
+            const res = await fetch(`/api/woo-orders?${p.toString()}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
             if (!res.ok) throw new Error("Failed to load orders");
             const data = await res.json();
             setOrders(data.orders || []);
@@ -100,8 +109,10 @@ export default function WooOrdersPage() {
     }
 
     useEffect(() => {
-        fetchOrders();
-    }, [page, search]);
+        if (user) {
+            fetchOrders();
+        }
+    }, [page, search, user]);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();

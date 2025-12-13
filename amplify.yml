@@ -50,6 +50,7 @@ frontend:
           )
           PY
         - npm run build
+        - cp .env.production .next/
   artifacts:
     baseDirectory: .next
     files:

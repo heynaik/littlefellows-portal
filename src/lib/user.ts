@@ -4,17 +4,21 @@ import { db } from "./firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
 /** Ensure a Firestore user doc exists; default role = vendor */
-export async function ensureUserDoc(uid: string, email: string | null) {
+export async function ensureUserDoc(
+  uid: string,
+  email: string | null,
+  initialRole?: "admin" | "vendor"
+) {
   const ref = doc(db, "users", uid);
   const snap = await getDoc(ref);
   if (!snap.exists()) {
     await setDoc(ref, {
       email: email ?? "",
-      role: "vendor",
+      role: initialRole ?? "vendor",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    return "vendor";
+    return initialRole ?? "vendor";
   }
   const data = snap.data() as { role?: "admin" | "vendor" };
   return data.role ?? "vendor";

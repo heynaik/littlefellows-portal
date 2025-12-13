@@ -2,7 +2,8 @@
 import { NextResponse } from "next/server";
 import type { Order, Stage } from "@/lib/types";
 import { requireUser } from "@/lib/server/auth";
-import { adminDb } from "@/lib/server/firebaseAdmin";
+import { adminDb, isFirebaseAdminInitialized } from "@/lib/server/firebaseAdmin";
+import { wooCommerceClient } from "@/lib/woocommerce";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 type CreateOrderPayload = Partial<Order>;
@@ -21,6 +22,7 @@ type RawOrder = {
   vendorId?: string | null;
   createdAt?: Timestamp | number | null;
   updatedAt?: Timestamp | number | null;
+  wcId?: string | number | null;
 };
 
 type UserDoc = {
@@ -108,15 +110,54 @@ function normalize(raw: RawOrder): Order {
 export async function GET(req: Request) {
   const userOrResp = await requireUser(req);
   if (userOrResp instanceof Response) return userOrResp;
-  const { uid, role, email } = userOrResp;
 
   try {
+    // FALLBACK: If DB is not initialized, fetch directly from WooCommerce
+    if (!isFirebaseAdminInitialized) {
+      const { uid, role, email } = userOrResp;
+
+      const { data: wcOrders } = await wooCommerceClient.get("orders", { per_page: 50 });
+      let fallbackOrders: Order[] = wcOrders.map((o: any) => ({
+        id: "fallback-" + o.id,
+        orderId: String(o.id),
+        bookTitle: o.line_items?.map((i: any) => i.name).join(", ") || "Untitled",
+        binding: "Soft",
+        deadline: new Date().toISOString().split("T")[0],
+        notes: "Dev Mode: Direct from Woo",
+        s3Key: null,
+        stage: "Uploaded",
+        vendorId: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        // Woo Fields
+        wcId: o.id,
+        customerName: [o.billing?.first_name, o.billing?.last_name].filter(Boolean).join(" "),
+        customerEmail: o.billing?.email,
+        totalAmount: o.total,
+        currency: o.currency,
+        wcStatus: o.status,
+      }));
+
+      // Apply Filter for Vendor in Dev Mode
+      if (role !== "admin") {
+        // In real logic we resolve identifiers. In dev fallback, we'll just check exact match or email.
+        // Since fallback defaults vendorId to null, this effectively hides everything unless we mock assignment.
+        // This is desired: "why see info without assigning?" -> now you won't.
+        fallbackOrders = fallbackOrders.filter(o =>
+          o.vendorId === uid || o.vendorId === email
+        );
+      }
+
+      return NextResponse.json(fallbackOrders, { status: 200 });
+    }
+
+    const { uid, role, email } = userOrResp;
     const col = adminDb.collection("orders");
     let orders: Order[] = [];
 
     if (role === "admin") {
       const snap = await col.orderBy("updatedAt", "desc").get();
-      orders = snap.docs.map((d) => normalize({ id: d.id, ...d.data() } as RawOrder));
+      orders = snap.docs.map((d: any) => normalize({ id: d.id, ...d.data() } as RawOrder));
     } else {
       const identifierList = await resolveVendorIdentifiers(uid, email);
       if (process.env.NODE_ENV !== "production") {
@@ -134,7 +175,7 @@ export async function GET(req: Request) {
 
       const merged = new Map<string, RawOrder>();
       for (const snap of snapshots) {
-        snap.docs.forEach((doc) => {
+        snap.docs.forEach((doc: any) => {
           merged.set(doc.id, { id: doc.id, ...doc.data() } as RawOrder);
         });
       }
@@ -152,13 +193,43 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json(orders, { status: 200 });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[orders.GET]", error);
-    return NextResponse.json({ message: "Failed to fetch orders" }, { status: 500 });
+    return NextResponse.json({ message: "Failed to fetch orders", error: error.message }, { status: 500 });
   }
 }
 
+
+
 export async function POST(req: Request) {
+  // DEV FALLBACK
+  if (!isFirebaseAdminInitialized) {
+    console.warn("[API] POST Orders: Dev Mode (No DB). Mocking success.");
+    const body = (await req.json()) as CreateOrderPayload;
+    const mockOrder: RawOrder = {
+      id: "mock-id-" + Date.now(),
+      orderId: body.orderId || "MOCK-ORDER",
+      bookTitle: body.bookTitle || "Mock Title",
+      binding: body.binding || "Soft",
+      deadline: body.deadline || new Date().toISOString().split("T")[0],
+      notes: body.notes || "",
+      s3Key: body.s3Key || null,
+      stage: body.stage || "Uploaded",
+      vendorId: body.vendorId || null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      wcId: body.wcId, // CRITICAL for linking
+    };
+
+    // Persist to local store
+    try {
+      const { saveMockOrder } = require("@/lib/server/localStore");
+      saveMockOrder(mockOrder);
+    } catch (e) { console.error("Mock save failed", e); }
+
+    return NextResponse.json(normalize(mockOrder), { status: 201 });
+  }
+
   const guard = await requireUser(req);
   if (guard instanceof Response) return guard;
   if (guard.role !== "admin") {
@@ -178,6 +249,13 @@ export async function POST(req: Request) {
       vendorId: body.vendorId ?? null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
+      wcId: body.wcId, // Store Woo ID
+      wcStatus: body.wcStatus,
+      customerName: body.customerName,
+      customerEmail: body.customerEmail,
+      totalAmount: body.totalAmount,
+      currency: body.currency,
+      lineItems: body.lineItems,
     };
 
     const ref = await adminDb.collection("orders").add(payload);
@@ -190,6 +268,19 @@ export async function POST(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  // DEV FALLBACK
+  if (!isFirebaseAdminInitialized) {
+    console.warn("[API] PUT Orders: Dev Mode. Mocking success.");
+    const { id, patch } = (await req.json()) as UpdateOrderPayload;
+
+    try {
+      const { saveMockOrder } = require("@/lib/server/localStore");
+      saveMockOrder({ id, ...patch, updatedAt: Date.now() });
+    } catch (e) { console.error("Mock save failed", e); }
+
+    return NextResponse.json({ ...patch, id, updatedAt: Date.now() }, { status: 200 });
+  }
+
   const guard = await requireUser(req);
   if (guard instanceof Response) return guard;
   if (guard.role !== "admin") {
@@ -213,6 +304,19 @@ export async function PUT(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  // DEV FALLBACK
+  if (!isFirebaseAdminInitialized) {
+    console.warn("[API] PATCH Orders: Dev Mode. Mocking success.");
+    const { id, stage } = (await req.json()) as UpdateStagePayload;
+
+    try {
+      const { saveMockOrder } = require("@/lib/server/localStore");
+      saveMockOrder({ id, stage, updatedAt: Date.now() });
+    } catch (e) { console.error("Mock save failed", e); }
+
+    return NextResponse.json({ id, stage, updatedAt: Date.now() }, { status: 200 });
+  }
+
   const guard = await requireUser(req);
   if (guard instanceof Response) return guard;
 
@@ -248,6 +352,12 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  // DEV FALLBACK
+  if (!isFirebaseAdminInitialized) {
+    console.warn("[API] DELETE Orders: Dev Mode. Mocking success.");
+    return new NextResponse(null, { status: 204 });
+  }
+
   const guard = await requireUser(req);
   if (guard instanceof Response) return guard;
   if (guard.role !== "admin") {

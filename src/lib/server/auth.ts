@@ -11,6 +11,12 @@ export type ServerUser = {
 export async function getUserFromRequest(req: Request): Promise<ServerUser | null> {
   const authz = req.headers.get('authorization') || req.headers.get('Authorization');
   const token = authz?.startsWith('Bearer ') ? authz.slice(7) : null;
+
+  // FALLBACK for Dev Mode if Firebase is missing
+  if (!adminAuth && process.env.NODE_ENV === 'development') {
+    return { uid: 'dev-fallback', role: 'admin', email: 'dev@localhost' };
+  }
+
   if (!token) return null;
   try {
     const decoded = await adminAuth.verifyIdToken(token);

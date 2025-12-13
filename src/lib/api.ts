@@ -1,5 +1,5 @@
 // src/lib/api.ts
-import type { Order } from '@/lib/types';
+import type { Order, Vendor } from '@/lib/types';
 
 type ReqInit = RequestInit & { parse?: "json" | "text" | "void" };
 
@@ -15,7 +15,7 @@ async function req<T = unknown>(path: string, init?: ReqInit): Promise<T> {
       const tok = await getIdToken(u, true);
       authHeader = { Authorization: `Bearer ${tok}` };
     }
-  } catch {}
+  } catch { }
   const res = await fetch(path, {
     ...init,
     headers: {
@@ -38,6 +38,12 @@ async function req<T = unknown>(path: string, init?: ReqInit): Promise<T> {
 /* ---------- Orders ---------- */
 export function getOrders() {
   return req<Order[]>("/api/orders");
+}
+
+export function syncOrders() {
+  return req<{ message: string; count: number }>("/api/orders/sync", {
+    method: "POST",
+  });
 }
 
 export function createOrder(body: Partial<Order>) {
@@ -96,13 +102,6 @@ export function getAdminStats() {
 }
 
 /* ---------- Vendors (admin) ---------- */
-export type Vendor = {
-  vendorId: string;
-  name: string;
-  contactEmail?: string;
-  active?: boolean;
-};
-
 export function getVendors() {
   return req<Vendor[]>("/api/admin/vendors");
 }

@@ -28,7 +28,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!loading && user && role) {
-      const destination = role === "admin" ? "/admin/orders" : "/vendor/orders";
+      const destination = role === "admin" ? "/admin" : "/vendor/orders";
       router.replace(destination);
     }
   }, [loading, role, router, user]);
@@ -39,7 +39,7 @@ export default function Home() {
     }
     if (user && role) {
       return {
-        href: role === "admin" ? "/admin/orders" : "/vendor/orders",
+        href: role === "admin" ? "/admin" : "/vendor/orders",
         label: role === "admin" ? "Go to Admin Dashboard" : "Go to Vendor Workspace",
       };
     }

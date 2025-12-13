@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // USERS COLLECTION
+    match /users/{userId} {
+      // Allow users to read and write their own data
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Allow admins to read/write all user data
+      allow read, write: if isAdmin();
+    }
+
+    // INVITES COLLECTION
+    match /invites/{code} {
+      // PERMISSION FIX: Registration logic checks invite BEFORE signup (unauthenticated)
+      allow get: if true;
+      
+      // PERMISSION FIX: Marking as used happens AFTER signup (authenticated)
+      allow update: if request.auth != null;
+      
+      // Only admins can create or delete invites
+      allow create, delete: if isAdmin();
+      
+      // Admins can list invites
+      allow list: if isAdmin();
+    }
+    
+    // ORDERS COLLECTION (assuming structure based on role)
+    match /orders/{orderId} {
+      allow read, write: if request.auth != null; // Refine this later for security
+    }
+  }
+}

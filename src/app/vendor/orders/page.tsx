@@ -1,363 +1,234 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { changeStage, getOrders, previewHref } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { auth, db } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import type { Order, Stage } from "@/lib/types";
-import StageBadge from "@/components/StageBadge";
-import { fmtDate } from "@/utils/date";
-import { Search, XCircle, ChevronDown } from "lucide-react";
+import {
+  FileText,
+  Loader2,
+  Package,
+  PackageOpen,
+  Truck,
+  CheckCircle2,
+  Printer,
+  MoreHorizontal,
+  RefreshCcw,
+  Search
+} from "lucide-react";
 import clsx from "clsx";
+import { format } from "date-fns";
 
-type StageFilter = "All" | Stage;
-
-const NEW_STAGE_STATES: Stage[] = ["Uploaded", "Assigned to Vendor"];
-const VENDOR_UPDATE_STAGES: Stage[] = [
+// Stages the vendor is allowed to manage
+const VENDOR_STAGES: Stage[] = [
+  "Assigned to Vendor",
   "Printing",
   "Quality Check",
   "Packed",
-  "Shipped to Admin",
+  "Shipped to Admin"
 ];
 
-const FILTERABLE_STAGES: (Stage | 'All')[] = ['All', ...VENDOR_UPDATE_STAGES];
-
-function isNewStage(stage: Stage) {
-  return NEW_STAGE_STATES.includes(stage);
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  return fallback;
-}
-
-export default function VendorOrdersPage() {
+export default function VendorDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState<StageFilter>("All");
+  const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const ordersSignatureRef = useRef<string>("");
-
-  const computeSignature = useCallback((list: Order[]) => {
-    return JSON.stringify(
-      list
-        .map((order) => ({
-          id: order.id ?? "",
-          updatedAt: order.updatedAt ?? 0,
-          stage: order.stage ?? "",
-          vendorId: order.vendorId ?? "",
-        }))
-        .sort((a, b) => a.id.localeCompare(b.id))
-    );
-  }, []);
-
-  const setOrdersWithSignature = useCallback(
-    (updater: (prev: Order[]) => Order[]) => {
-      setOrders((prev) => {
-        const next = updater(prev);
-        const signature = computeSignature(next);
-        if (ordersSignatureRef.current === signature) {
-          return prev;
-        }
-        ordersSignatureRef.current = signature;
-        return next;
-      });
-    },
-    [computeSignature]
-  );
-
-  const refresh = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
-    if (!silent) {
-      setLoading(true);
-      setErr(null);
-    }
-    try {
-      const data = await getOrders();
-      setOrdersWithSignature(() => data);
-      setErr(null);
-    } catch (error) {
-      setErr(getErrorMessage(error, "Failed to load orders"));
-    } finally {
-      if (!silent) {
-        setLoading(false);
-      }
-    }
-  }, [setOrdersWithSignature]);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
-    let cancelled = false;
-    let inflight = false;
-
-    const tick = async (opts?: { silent?: boolean }) => {
-      if (cancelled || inflight) return;
-      inflight = true;
-      try {
-        await refresh(opts);
-      } finally {
-        inflight = false;
-      }
-    };
-
-    tick();
-    const interval = setInterval(() => tick({ silent: true }), 8000);
-    const handleVisibility = () => {
-      if (!document.hidden) tick({ silent: true });
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [refresh]);
-
-  const [tab, setTab] = useState<'newOrders' | 'orders'>('newOrders');
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-
-    const base = orders.filter((o) => {
-      const matchesQuery =
-        q === "" ||
-        o.orderId.toLowerCase().includes(q) ||
-        o.bookTitle.toLowerCase().includes(q) ||
-        (o.notes ?? "").toLowerCase().includes(q);
-
-      if (q !== "") {
-        return matchesQuery;
+    // Real-time listener secured by Vendor ID
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setLoading(false);
+        setOrders([]); // No user, no orders
+        return;
       }
 
-      const stage = (o.stage ?? "Uploaded") as Stage;
-      const matchStage = stageFilter === "All" || stage === stageFilter;
-      return matchesQuery && matchStage;
+      setLoading(true);
+      const q = query(collection(db, "orders"), where("vendorId", "==", user.uid));
+
+      const unsubDocs = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Order[];
+        // Sort safely by createdAt desc
+        data.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        setOrders(data);
+        setLoading(false);
+      }, (err) => {
+        console.error("Dashboard listener failed:", err);
+        setLoading(false);
+      });
+
+      return () => unsubDocs();
     });
 
-    return base.filter((o) => {
-      if (q !== "") return true;
-      const stage = (o.stage ?? "Uploaded") as Stage;
-      return tab === 'newOrders' ? isNewStage(stage) : !isNewStage(stage);
-    });
-  }, [orders, search, stageFilter, tab]);
+    return () => unsubAuth();
+  }, []);
 
-  async function handleStageChange(order: Order, nextStage: Stage) {
-    if (!order.id) return;
+  const handleStageUpdate = async (orderId: string, newStage: Stage) => {
+    if (!orderId) return;
+    setUpdatingId(orderId);
     try {
-      setUpdatingId(order.id);
-      await changeStage(order.id, nextStage);
-      setOrdersWithSignature((prev) =>
-        prev.map((existing) =>
-          existing.id === order.id
-            ? { ...existing, stage: nextStage, updatedAt: Date.now() }
-            : existing
-        )
-      );
-      await refresh({ silent: true });
-    } catch (error) {
-      setErr(getErrorMessage(error, "Failed to update stage"));
+      // Direct Firestore Update
+      await updateDoc(doc(db, "orders", orderId), {
+        stage: newStage,
+        updatedAt: Date.now()
+      });
+      // No manual state update needed, onSnapshot will handle it
+    } catch (err) {
+      console.error("Failed to update status", err);
+      alert("Failed to update status");
     } finally {
       setUpdatingId(null);
     }
-  }
+  };
 
-  function clearFilters() {
-    setSearch("");
-    setStageFilter("All");
-    setTab('newOrders');
-  }
-
-  const newCount = orders.filter((o) => isNewStage((o.stage ?? 'Uploaded') as Stage)).length;
-  const activeCount = orders.length - newCount;
+  const filteredOrders = orders.filter(o =>
+    o.bookTitle.toLowerCase().includes(search.toLowerCase()) ||
+    o.orderId.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-slate-900">My Orders</h1>
-        <p className="text-sm text-slate-500">
-          Download PDFs and update production stages.
-        </p>
-      </div>
+    <div className="min-h-screen bg-slate-50 p-6 md:p-12 font-sans">
+      <div className="max-w-6xl mx-auto space-y-8">
 
-      <div className="rounded-[28px] border border-slate-200/60 bg-white/90 p-5 shadow-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              className="h-12 w-full rounded-full border border-slate-200 bg-white pl-12 pr-5 text-sm font-medium text-slate-600 shadow-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              placeholder="Search by Order ID, Title, Notes"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
-          <div className="inline-flex flex-shrink-0 items-center gap-2 rounded-full bg-slate-100 p-1">
-            {(
-              [
-                { value: 'newOrders', label: 'New Orders' },
-                { value: 'orders', label: 'Orders' },
-              ] as const
-            ).map(({ value, label }) => (
-              <button
-                key={value}
-                onClick={() => setTab(value)}
-                className={clsx(
-                  'rounded-full px-4 py-2 text-sm font-medium transition',
-                  tab === value
-                    ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-200'
-                    : 'text-slate-600 hover:text-slate-900'
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="relative flex-shrink-0 min-w-[200px]">
-            <select
-              className="h-12 w-full appearance-none rounded-full border border-slate-200 bg-white px-5 pr-12 text-sm font-medium text-slate-600 shadow-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              value={stageFilter}
-              onChange={(e) => setStageFilter(e.target.value as StageFilter)}
-            >
-              {FILTERABLE_STAGES.map((stage) => (
-                <option key={stage} value={stage}>
-                  {stage}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          </div>
-        <button
-          className="inline-flex h-12 items-center rounded-full border border-transparent px-4 text-slate-400 transition hover:text-indigo-500"
-          onClick={clearFilters}
-          aria-label="Clear filters"
-        >
-          <XCircle className="h-5 w-5" />
-        </button>
-      </div>
-    </div>
-
-      <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
-        <div className="flex items-center justify-between border-b border-[var(--border)] bg-slate-50 px-6 py-3 text-sm font-medium text-slate-500">
-          <span>
-            {tab === 'newOrders' ? `New orders: ${newCount}` : `Orders: ${activeCount}`}
-          </span>
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            {loading
-              ? "Loading orders…"
-              : `${filtered.length} order${filtered.length === 1 ? "" : "s"}`}
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Vendor Dashboard</h1>
+            <p className="text-slate-500 mt-2">Manage your printing queue and updates.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="relative group">
+              <input
+                type="text"
+                placeholder="Search orders..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white shadow-sm focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 focus:outline-none transition-all w-64 text-sm font-medium"
+              />
+              <Search className="absolute left-3.5 top-3 text-slate-400" size={16} />
+            </div>
+            {/* Auto-updating, no refresh needed */}
           </div>
         </div>
 
-        {err && (
-          <div className="border-b border-red-100 bg-red-50 px-6 py-3 text-sm text-red-700">
-            {err}
+        {/* Content Area */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 className="animate-spin text-indigo-500 mb-4" size={40} />
+            <p className="text-slate-500 font-medium animate-pulse">Loading your dashboard...</p>
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-500">
+            <div className="bg-slate-100 p-6 rounded-full mb-6">
+              <PackageOpen className="text-slate-400" size={48} />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">No Orders Assigned</h3>
+            <p className="text-slate-500 max-w-sm mx-auto">
+              You currently have no new printing tasks assigned to you. When an admin assigns an order, it will appear here instantly.
+            </p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50/50 border-b border-slate-100 text-xs uppercase tracking-wider text-slate-500 font-bold">
+                    <th className="p-5 pl-6">Order Details</th>
+                    <th className="p-5">Book Info</th>
+                    <th className="p-5">Current Stage</th>
+                    <th className="p-5 text-right pr-6">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {filteredOrders.length === 0 ? (
+                    <tr><td colSpan={4} className="p-16 text-center text-slate-400">No orders match your search.</td></tr>
+                  ) : (
+                    filteredOrders.map(order => (
+                      <tr key={order.id} className="group hover:bg-slate-50/50 transition-colors">
+                        <td className="p-5 pl-6">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-slate-800 text-sm">#{order.orderId}</span>
+                            <span className="text-xs text-slate-500 mt-1">{format(new Date(order.createdAt || Date.now()), 'MMM d, yyyy')}</span>
+                            {order.notes && (
+                              <span className="mt-1 inline-block px-2 py-0.5 rounded bg-yellow-50 text-yellow-700 text-[10px] font-bold border border-yellow-100 max-w-fit">
+                                NOTE: {order.notes}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-5">
+                          <div className="font-semibold text-slate-800 text-sm">{order.bookTitle}</div>
+                          <div className={clsx(
+                            "mt-1.5 inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide border",
+                            order.binding === 'Hard' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-100 text-slate-600 border-slate-200'
+                          )}>
+                            {order.binding === 'Hard' ? 'Hardcover' : 'Softcover'}
+                          </div>
+                        </td>
+                        <td className="p-5">
+                          <div className="relative inline-block w-48">
+                            <select
+                              value={order.stage || "Assigned to Vendor"}
+                              onChange={(e) => handleStageUpdate(order.id!, e.target.value as Stage)}
+                              disabled={!!updatingId}
+                              className={clsx(
+                                "appearance-none w-full pl-9 pr-8 py-2 rounded-xl text-xs font-bold shadow-sm border transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer",
+                                order.stage === 'Shipped to Admin' ? 'bg-green-50 border-green-200 text-green-700' :
+                                  order.stage === 'Printing' ? 'bg-blue-50 border-blue-200 text-blue-700' :
+                                    'bg-white border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600'
+                              )}
+                            >
+                              {VENDOR_STAGES.map(s => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+
+                            {/* Icon Overlay */}
+                            <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                              {updatingId === order.id ? (
+                                <Loader2 size={14} className="animate-spin text-slate-400" />
+                              ) : order.stage === 'Printing' ? (
+                                <Printer size={14} className="text-blue-500" />
+                              ) : order.stage === 'Shipped to Admin' ? (
+                                <Truck size={14} className="text-green-500" />
+                              ) : (
+                                <Package size={14} className="text-slate-400" />
+                              )}
+                            </div>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                              <MoreHorizontal size={14} />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-5 text-right pr-6">
+                          {order.s3Key ? (
+                            <a
+                              href={`/api/view-url?key=${encodeURIComponent(order.s3Key)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 transition-all hover:-translate-y-0.5"
+                            >
+                              <FileText size={16} />
+                              Download PDF
+                            </a>
+                          ) : (
+                            <button disabled className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 rounded-xl text-sm font-bold cursor-not-allowed">
+                              <FileText size={16} />
+                              No PDF
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="table">
-            <thead className="bg-white">
-              <tr className="border-b border-[var(--border)] text-xs uppercase tracking-wide text-slate-500">
-                <th className="px-6 py-3">Order ID</th>
-                <th className="px-6 py-3">Book Title</th>
-                <th className="px-6 py-3">Binding</th>
-                <th className="px-6 py-3">Stage</th>
-                <th className="px-6 py-3">Updated</th>
-                <th className="px-6 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((order) => {
-                const stage = (order.stage ?? "Uploaded") as Stage;
-                const disableStage = !order.id || updatingId === order.id;
-                const selectValue = VENDOR_UPDATE_STAGES.includes(stage) ? stage : "";
-
-                return (
-                  <tr
-                    key={order.id ?? order.orderId}
-                    className="border-b border-slate-100 last:border-0"
-                  >
-                    <td className="px-6 py-4 font-medium text-slate-900">
-                      {order.orderId || "—"}
-                    </td>
-                    <td className="px-6 py-4 text-slate-700">
-                      <div className="flex flex-col">
-                        <span>{order.bookTitle}</span>
-                        {order.notes && (
-                          <span className="text-xs text-slate-400">
-                            {order.notes}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                        {order.binding}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <StageBadge stage={stage} />
-                        <select
-                          className="select w-40 text-xs"
-                          value={selectValue}
-                          disabled={disableStage}
-                          onChange={(e) => {
-                            const next = e.target.value as Stage;
-                            if (!next) return;
-                            handleStageChange(order, next);
-                          }}
-                        >
-                          <option value="" disabled>
-                            {disableStage
-                              ? "Updating…"
-                              : VENDOR_UPDATE_STAGES.includes(stage)
-                              ? "Select stage"
-                              : "Update stage"}
-                          </option>
-                          {VENDOR_UPDATE_STAGES.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-slate-600">
-                      {fmtDate(order.updatedAt)}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      {order.s3Key ? (
-                        <a
-                          className="btn-ghost"
-                          href={previewHref(order.s3Key)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          View / Download PDF
-                        </a>
-                      ) : (
-                        <span className="text-sm text-slate-400">No PDF</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-
-              {!loading && filtered.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-6 py-12 text-center text-sm text-slate-500"
-                  >
-                    No orders match your filters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      </div>
     </div>
   );
 }

@@ -159,11 +159,22 @@ function buildCredential(): AdminCredential {
   return { projectId, clientEmail, privateKey };
 }
 
-export const adminApp = getApps().length
-  ? getApp()
-  : initializeApp({
-      credential: cert(buildCredential()),
+export let adminApp: any = null;
+export let adminAuth: any = null;
+export let adminDb: any = null;
+export let isFirebaseAdminInitialized = false;
+
+try {
+  const credential = buildCredential();
+  adminApp = getApps().length
+    ? getApp()
+    : initializeApp({
+      credential: cert(credential),
     });
 
-export const adminAuth = getAuth(adminApp);
-export const adminDb = getFirestore(adminApp);
+  adminAuth = getAuth(adminApp);
+  adminDb = getFirestore(adminApp);
+  isFirebaseAdminInitialized = true;
+} catch (error: any) {
+  console.warn("[Firebase Admin] Initialization failed. Proceeding in Fallback Mode.", error.message);
+}

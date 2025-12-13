@@ -52,7 +52,10 @@ export async function GET(req: Request) {
         const customerMap = new Map();
 
         registeredParams.forEach((c: any) => {
-            customerMap.set(c.email, {
+            const emailKey = (c.email || "").toLowerCase();
+            if (!emailKey) return;
+
+            customerMap.set(emailKey, {
                 id: c.id,
                 email: c.email,
                 first_name: c.first_name,
@@ -67,9 +70,9 @@ export async function GET(req: Request) {
             });
         });
 
-        // Extract Guests from Orders
+        // Extract Guests from Orders AND Backfill Registered Users
         orders.forEach((o: any) => {
-            const email = o.billing?.email;
+            const email = (o.billing?.email || "").toLowerCase();
             if (!email) return;
 
             const isGuestOrder = o.customer_id === 0;
@@ -77,10 +80,10 @@ export async function GET(req: Request) {
             if (type === 'guest' && !isGuestOrder) return;
             if (type === 'registered' && isGuestOrder) return;
 
-            // If not already in map, add.
+            // If not already in map, add as Guest
             if (!customerMap.has(email)) {
                 if (type === 'all' && !isGuestOrder) {
-                    // Registered user not in list (pagination?), ignore for now to avoid duplicates or incomplete data
+                    // Registered user not in list (pagination?), ignore for now
                 }
 
                 customerMap.set(email, {
@@ -97,9 +100,34 @@ export async function GET(req: Request) {
                     is_guest: isGuestOrder
                 });
             } else {
-                // Determine if we should update stats?
-                // For guests, we might want to sum up if we find multiple orders
-                // But for simplicity in this merged view, we rely on what we have.
+                // Customer exists (Registered). Check if we can enrich data from this order.
+                const existing = customerMap.get(email);
+
+                // Backfill Name if missing
+                if ((!existing.first_name && !existing.last_name) && (o.billing.first_name || o.billing.last_name)) {
+                    existing.first_name = o.billing.first_name;
+                    existing.last_name = o.billing.last_name;
+                }
+
+                // Backfill Phone if missing
+                if (!existing.billing?.phone && o.billing.phone) {
+                    if (!existing.billing) existing.billing = {};
+                    existing.billing.phone = o.billing.phone;
+                }
+
+                // Backfill Address if missing
+                if (!existing.billing?.city && o.billing.city) {
+                    // If the profile has absolutely no address, take the order's billing address
+                    existing.billing = { ...existing.billing, ...o.billing };
+                }
+
+                // Update Spend/Count if they appear to be zero (sync issue)
+                // If the registered user has 0 orders but we found an order, clearly they have at least 1.
+                if (Number(existing.orders_count) === 0) {
+                    existing.orders_count = 1; // At least one
+                    // We could try to sum up totals but that requires iterating all orders for this user. 
+                    // For now, at least fixing the "0 orders" display is good.
+                }
             }
         });
 

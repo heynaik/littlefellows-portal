@@ -1,115 +1,128 @@
+
 import { NextResponse } from "next/server";
-import fs, { existsSync, mkdirSync } from "fs";
-import path from "path";
+import { adminDb } from "@/lib/server/firebaseAdmin";
 
-// Define the path to the local JSON DB
-const DATA_DIR = path.join(process.cwd(), "src", "data");
-const DATA_FILE = path.join(DATA_DIR, "child_profiles.json");
-
-// Helper to read data
-function readData(): any[] {
-    if (!existsSync(DATA_FILE)) return [];
-    try {
-        const fileContent = fs.readFileSync(DATA_FILE, "utf-8");
-        return JSON.parse(fileContent);
-    } catch (e) {
-        console.error("Error reading local child_profiles.json", e);
-        return [];
-    }
-}
-
-// Helper to write data
-function writeData(data: any[]) {
-    if (!existsSync(DATA_DIR)) {
-        mkdirSync(DATA_DIR, { recursive: true });
-    }
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
-}
+const COLLECTION = "child_profiles";
 
 export async function GET(req: Request) {
+    if (!adminDb) {
+        return NextResponse.json({ error: "Firebase Admin not initialized" }, { status: 500 });
+    }
+
     const { searchParams } = new URL(req.url);
     const parentEmail = searchParams.get("parentEmail");
     const childName = searchParams.get("childName");
     const getAll = searchParams.get("getAll");
 
-    const profiles = readData();
+    try {
+        if (getAll) {
+            const snapshot = await adminDb
+                .collection(COLLECTION)
+                .orderBy("createdAt", "desc")
+                .get();
 
-    if (getAll) {
-        // Return all profiles sorted by createdAt desc
-        const sorted = profiles.sort((a, b) => {
-            const dateA = new Date(a.createdAt || 0).getTime();
-            const dateB = new Date(b.createdAt || 0).getTime();
-            return dateB - dateA;
-        });
-        return NextResponse.json(sorted);
+            const profiles = snapshot.docs.map((doc: any) => ({
+                id: doc.id,
+                ...doc.data(),
+                // Convert Timestamps to ISO strings
+                createdAt: doc.data().createdAt?.toDate().toISOString(),
+                updatedAt: doc.data().updatedAt?.toDate().toISOString()
+            }));
+            return NextResponse.json(profiles);
+        }
+
+        if (parentEmail && childName) {
+            const snapshot = await adminDb
+                .collection(COLLECTION)
+                .where("parentEmail", "==", parentEmail)
+                .where("childName", "==", childName)
+                .limit(1)
+                .get();
+
+            if (snapshot.empty) {
+                return NextResponse.json(null);
+            }
+
+            const doc = snapshot.docs[0];
+            const data = doc.data();
+            return NextResponse.json({
+                id: doc.id,
+                ...data,
+                createdAt: data.createdAt?.toDate().toISOString(),
+                updatedAt: data.updatedAt?.toDate().toISOString()
+            });
+        }
+
+        return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
+
+    } catch (error) {
+        console.error("Firestore GET Error:", error);
+        return NextResponse.json({ error: "Failed to fetch profiles" }, { status: 500 });
     }
-
-    if (parentEmail && childName) {
-        const profile = profiles.find(
-            p => p.parentEmail === parentEmail && p.childName === childName
-        );
-        return NextResponse.json(profile || null);
-    }
-
-    return NextResponse.json(profiles);
 }
 
 export async function POST(req: Request) {
+    if (!adminDb) {
+        return NextResponse.json({ error: "Firebase Admin not initialized" }, { status: 500 });
+    }
+
     try {
         const body = await req.json();
         const { parentEmail, childName, voiceUrl, voiceOwner, action } = body;
 
-        let profiles = readData();
+        if (!parentEmail || !childName) {
+            return NextResponse.json({ error: "Missing parentEmail or childName" }, { status: 400 });
+        }
+
+        // Check if profile exists
+        const snapshot = await adminDb
+            .collection(COLLECTION)
+            .where("parentEmail", "==", parentEmail)
+            .where("childName", "==", childName)
+            .limit(1)
+            .get();
+
+        const now = new Date();
 
         if (action === "delete_voice") {
-            // Find and update
-            const idx = profiles.findIndex(
-                p => p.parentEmail === parentEmail && p.childName === childName
-            );
-
-            if (idx > -1) {
-                profiles[idx].voiceUrl = null;
-                profiles[idx].voiceOwner = null;
-                profiles[idx].updatedAt = new Date().toISOString();
-                writeData(profiles);
+            if (!snapshot.empty) {
+                const docId = snapshot.docs[0].id;
+                await adminDb.collection(COLLECTION).doc(docId).update({
+                    voiceUrl: null,
+                    voiceOwner: null,
+                    updatedAt: now
+                });
             }
             return NextResponse.json({ success: true });
         }
 
-        // Create or Update
-        const idx = profiles.findIndex(
-            p => p.parentEmail === parentEmail && p.childName === childName
-        );
-
-        const now = new Date().toISOString();
-
-        if (idx > -1) {
+        // Upsert Logic
+        if (!snapshot.empty) {
             // Update
-            profiles[idx] = {
-                ...profiles[idx],
-                voiceUrl: voiceUrl || profiles[idx].voiceUrl,
-                voiceOwner: voiceOwner || profiles[idx].voiceOwner,
+            const docId = snapshot.docs[0].id;
+            const existingData = snapshot.docs[0].data();
+
+            await adminDb.collection(COLLECTION).doc(docId).update({
+                voiceUrl: voiceUrl || existingData.voiceUrl,
+                voiceOwner: voiceOwner || existingData.voiceOwner,
                 updatedAt: now
-            };
+            });
+            return NextResponse.json({ success: true, id: docId });
         } else {
-            // Create New
-            const newProfile = {
-                id: `local_${Date.now()}`,
+            // Create
+            const newDoc = await adminDb.collection(COLLECTION).add({
                 parentEmail,
                 childName,
                 voiceUrl,
                 voiceOwner,
                 createdAt: now,
                 updatedAt: now
-            };
-            profiles.push(newProfile);
+            });
+            return NextResponse.json({ success: true, id: newDoc.id });
         }
 
-        writeData(profiles);
-        return NextResponse.json({ success: true, id: idx > -1 ? profiles[idx].id : "new" });
-
     } catch (error) {
-        console.error("Local DB Save Error:", error);
+        console.error("Firestore POST Error:", error);
         return NextResponse.json({ error: "Failed to save profile" }, { status: 500 });
     }
 }

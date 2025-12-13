@@ -1,7 +1,9 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { ArrowLeft, BookOpen, User, Tag, Smile, Star, Calendar, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 
@@ -57,7 +59,7 @@ export default function StoryDetailPage() {
             <button
                 type="button"
                 onClick={handleCopy}
-                className={`p-2 text-indigo-600 bg-white/50 hover:bg-white rounded-lg shadow-sm border border-indigo-100 hover:border-indigo-300 transition-all z-20 hover:scale-105 active:scale-95 ${className}`}
+                className={`p - 2 text - indigo - 600 bg - white / 50 hover: bg - white rounded - lg shadow - sm border border - indigo - 100 hover: border - indigo - 300 transition - all z - 20 hover: scale - 105 active: scale - 95 ${className} `}
                 title="Copy to clipboard"
             >
                 {copied ? <Check size={16} className="text-green-600 stroke-[3px]" /> : <Copy size={16} className="stroke-[2px]" />}
@@ -74,7 +76,7 @@ export default function StoryDetailPage() {
                 const id = params?.id;
                 if (!id) return;
 
-                const res = await fetch(`/api/stories/${id}`);
+                const res = await fetch(`/ api / stories / ${id} `);
                 if (!res.ok) throw new Error("Failed to fetch story");
                 const data = await res.json();
                 setStory(data);
@@ -93,13 +95,17 @@ export default function StoryDetailPage() {
         if (!story) return;
         setIsDeleting(true);
         try {
-            const res = await fetch(`/api/stories/${story.id}`, { method: "DELETE" });
-            if (!res.ok) throw new Error("Failed to delete");
-            // Use router for smooth transition
+            const res = await fetch(`/ api / stories / ${story.id} `, { method: "DELETE" });
+            if (!res.ok) {
+                throw new Error("Failed to delete story");
+            }
+            toast.success("Story deleted successfully");
             router.push("/admin/stories");
         } catch (err) {
-            console.error(err);
-            alert("Error deleting story");
+            console.error('Error deleting story:', err);
+            const message = err instanceof Error ? err.message : "An unknown error occurred";
+            toast.error(message);
+        } finally {
             setIsDeleting(false);
             setShowDeleteConfirm(false);
         }
@@ -141,13 +147,13 @@ export default function StoryDetailPage() {
                             Delete
                         </button>
                         <Link
-                            href={`/admin/stories/${story.id}/edit`}
+                            href={`/ admin / stories / ${story.id}/edit`}
                             className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm hover:shadow-md"
                         >
                             Edit Story
-                        </Link>
-                    </div>
-                </div>
+                        </Link >
+                    </div >
+                </div >
                 <div className="flex flex-col md:flex-row gap-8 items-start">
                     {/* Cover Image */}
                     <div className="w-full md:w-1/3 max-w-[300px] aspect-[3/4] rounded-2xl overflow-hidden bg-slate-100 shadow-lg border border-slate-200 relative">
@@ -214,12 +220,12 @@ export default function StoryDetailPage() {
                         </div>
                     </div>
                 </div>
-            </div>
+            </div >
 
             {/* Content Tabs / Sections */}
-            <div className="space-y-8">
+            < div className="space-y-8" >
                 {/* Pages Section */}
-                <div className="bg-slate-50 rounded-3xl p-6 md:p-8 border border-slate-200">
+                < div className="bg-slate-50 rounded-3xl p-6 md:p-8 border border-slate-200" >
                     <button
                         onClick={() => setIsPagesExpanded(!isPagesExpanded)}
                         className="w-full flex items-center justify-between group mb-2"
@@ -236,83 +242,89 @@ export default function StoryDetailPage() {
                         </div>
                     </button>
 
-                    {isPagesExpanded && (
-                        <div className="grid grid-cols-1 gap-6 mt-6 animate-in slide-in-from-top-4 duration-300">
-                            {story.pages.map((page, index) => (
-                                <div key={index} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 relative overflow-hidden group">
-                                    <div className="absolute top-0 left-0 bottom-0 w-1 bg-indigo-500"></div>
-                                    <div className="flex flex-col md:flex-row gap-6">
-                                        <div className="flex-1 relative">
-                                            <div className="absolute top-0 right-0">
-                                                <CopyButton text={page.content} />
-                                            </div>
-                                            <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-3">
-                                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 text-indigo-700 text-sm font-bold border border-indigo-100">
-                                                    {index + 1}
-                                                </span>
-                                                {page.title}
-                                            </h3>
-                                            <p className="text-slate-600 font-serif text-lg leading-relaxed whitespace-pre-wrap pr-10">{page.content}</p>
-                                        </div>
-                                        {page.imagePrompt && (
-                                            <div className="w-full md:w-1/3 bg-slate-50 rounded-xl p-4 border border-slate-100 h-fit relative">
-                                                <div className="absolute top-4 right-4">
-                                                    <CopyButton text={page.imagePrompt || ""} />
+                    {
+                        isPagesExpanded && (
+                            <div className="grid grid-cols-1 gap-6 mt-6 animate-in slide-in-from-top-4 duration-300">
+                                {story.pages.map((page, index) => (
+                                    <div key={index} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 relative overflow-hidden group">
+                                        <div className="absolute top-0 left-0 bottom-0 w-1 bg-indigo-500"></div>
+                                        <div className="flex flex-col md:flex-row gap-6">
+                                            <div className="flex-1 relative">
+                                                <div className="absolute top-0 right-0">
+                                                    <CopyButton text={page.content} />
                                                 </div>
-                                                <p className="text-xs font-bold text-slate-400 uppercase mb-2">Image Prompt</p>
-                                                <p className="text-sm text-slate-500 italic pr-8">{page.imagePrompt}</p>
+                                                <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-3">
+                                                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 text-indigo-700 text-sm font-bold border border-indigo-100">
+                                                        {index + 1}
+                                                    </span>
+                                                    {page.title}
+                                                </h3>
+                                                <p className="text-slate-600 font-serif text-lg leading-relaxed whitespace-pre-wrap pr-10">{page.content}</p>
                                             </div>
-                                        )}
+                                            {page.imagePrompt && (
+                                                <div className="w-full md:w-1/3 bg-slate-50 rounded-xl p-4 border border-slate-100 h-fit relative">
+                                                    <div className="absolute top-4 right-4">
+                                                        <CopyButton text={page.imagePrompt || ""} />
+                                                    </div>
+                                                    <p className="text-xs font-bold text-slate-400 uppercase mb-2">Image Prompt</p>
+                                                    <p className="text-sm text-slate-500 italic pr-8">{page.imagePrompt}</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                                ))}
+                            </div>
+                        )
+                    }
+                </div >
 
                 {/* Narration Section */}
-                {story.narrationFlow && (
-                    <div>
-                        <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                            <span className="text-2xl">🎙️</span>
-                            Narration Script
-                        </h2>
-                        <div className="bg-slate-900 rounded-2xl p-6 md:p-8 shadow-lg text-slate-300 font-mono text-sm leading-7 whitespace-pre-wrap relative group">
-                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <CopyButton text={story.narrationFlow} className="bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 hover:border-slate-500" />
+                {
+                    story.narrationFlow && (
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                                <span className="text-2xl">🎙️</span>
+                                Narration Script
+                            </h2>
+                            <div className="bg-slate-900 rounded-2xl p-6 md:p-8 shadow-lg text-slate-300 font-mono text-sm leading-7 whitespace-pre-wrap relative group">
+                                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <CopyButton text={story.narrationFlow} className="bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700 hover:border-slate-500" />
+                                </div>
+                                {story.narrationFlow}
                             </div>
-                            {story.narrationFlow}
                         </div>
-                    </div>
-                )}
-            </div>
+                    )
+                }
+            </div >
 
             {/* Delete Confirmation Modal */}
-            {showDeleteConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
-                        <h3 className="text-xl font-bold text-slate-900 mb-2">Delete Story?</h3>
-                        <p className="text-slate-600 mb-6">
-                            Are you sure you want to delete <span className="font-semibold">&quot;{story.title}&quot;</span>? This action cannot be undone.
-                        </p>
-                        <div className="flex justify-end gap-3">
-                            <button
-                                onClick={() => setShowDeleteConfirm(false)}
-                                className="px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleDelete}
-                                disabled={isDeleting}
-                                className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-all"
-                            >
-                                {isDeleting ? "Deleting..." : "Delete Story"}
-                            </button>
+            {
+                showDeleteConfirm && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+                        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">Delete Story?</h3>
+                            <p className="text-slate-600 mb-6">
+                                Are you sure you want to delete <span className="font-semibold">&quot;{story.title}&quot;</span>? This action cannot be undone.
+                            </p>
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={() => setShowDeleteConfirm(false)}
+                                    className="px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleDelete}
+                                    disabled={isDeleting}
+                                    className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-all"
+                                >
+                                    {isDeleting ? "Deleting..." : "Delete Story"}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 }

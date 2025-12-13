@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { wooCommerceClient } from "@/lib/woocommerce";
-import { differenceInDays, parseISO } from 'date-fns';
+import { differenceInDays, parseISO, format } from 'date-fns';
 
 export async function GET() {
     try {
@@ -19,10 +19,6 @@ export async function GET() {
         const totalSales = revenueOrders.reduce((acc: number, order: any) => acc + parseFloat(order.total || "0"), 0);
 
         // Priority Count: > 4 days and not completed
-        // Replicating logic here to avoid importing relative 'src/lib/utils' which might be iffy in some build setups if not configured, 
-        // but importing is cleaner. Let's try importing.
-        // Actually, for safety and speed in this tool, I'll inline the simple logic or dynamic import.
-        // Let's import.
         const now = new Date();
         const priorityCount = orders.filter((order: any) => {
             const status = order.status;
@@ -31,11 +27,37 @@ export async function GET() {
             return age > 4;
         }).length;
 
+        // Fetch Sales Report (Last 30 Days) for Chart
+        let chartData: { date: string, total: number, orders: number }[] = [];
+        try {
+            const reportRes = await wooCommerceClient.get("reports/sales", {
+                period: "month", // Last month (approx 30 days)
+                date_min: format(new Date(now.setDate(now.getDate() - 30)), 'yyyy-MM-dd'),
+                date_max: format(new Date(), 'yyyy-MM-dd')
+            });
+            // Support both array or object response structure depending on version
+            const reports = Array.isArray(reportRes.data) ? reportRes.data : [];
+
+            // Transform for Recharts: { date: 'Dec 01', total: 150.00 }
+            if (reports.length > 0) {
+                chartData = reports[0].totals ? Object.keys(reports[0].totals).map(dateStr => ({
+                    date: format(parseISO(dateStr), 'MMM dd'),
+                    total: parseFloat(reports[0].totals[dateStr].sales) || 0,
+                    orders: parseInt(reports[0].totals[dateStr].orders) || 0
+                })) : [];
+            }
+        } catch (reportError) {
+            console.warn("Failed to fetch reports/sales, skipping chart data", reportError);
+            // Fallback: If report fails (permissions?), we could manually aggregate 'orders' if we had fetched enough.
+            // For now, return empty chart data.
+        }
+
         return NextResponse.json({
             revenue: totalSales,
             currency_symbol: "₹",
             order_count: revenueOrders.length,
-            priority_count: priorityCount
+            priority_count: priorityCount,
+            chart_data: chartData
         });
 
     } catch (error: any) {

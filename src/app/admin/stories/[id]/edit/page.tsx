@@ -11,6 +11,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import clsx from "clsx";
+import { toast } from "sonner";
 
 // Types
 type Step = 1 | 2;
@@ -111,9 +112,10 @@ export default function EditStoryPage() {
                 }
 
                 setIsLoading(false);
-            } catch (error) {
-                console.error(error);
-                alert("Failed to load story data");
+            } catch (error: unknown) {
+                console.error('Error fetching story:', error);
+                const msg = error instanceof Error ? error.message : "Unknown error";
+                toast.error(`Failed to load story data: ${msg}`);
                 router.push("/admin/stories");
             }
         }
@@ -226,18 +228,18 @@ export default function EditStoryPage() {
                 body: JSON.stringify(payload),
             });
 
-            if (!saveRes.ok) {
+            if (saveRes.ok) {
+                toast.success("Story updated successfully!");
+                router.push(`/admin/stories/${id}`);
+            } else {
                 const err = await saveRes.json();
-                throw new Error(err.error || "Failed to update story");
+                toast.error(err.error || 'Failed to update story');
             }
-
-            alert("Story updated successfully!");
-            router.push(`/admin/stories/${id}`);
 
         } catch (error) {
             console.error(error);
             const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-            alert(`Error: ${errorMessage}`);
+            toast.error(`Error: ${errorMessage}`);
         } finally {
             setIsSubmitting(false);
         }

@@ -10,6 +10,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { isPriorityOrder } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RevenueChart } from "@/components/admin/RevenueChart";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -19,6 +20,7 @@ export default function AdminDashboard() {
     sales: "0.00"
   });
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -49,6 +51,7 @@ export default function AdminDashboard() {
         });
 
         setRecentOrders(ordersData.orders || []);
+        setChartData(statsData.chart_data || []);
 
       } catch (error) {
         console.error("Dashboard load failed", error);
@@ -168,6 +171,9 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Recent Orders - Takes up 2 columns */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Revenue Chart */}
+          <RevenueChart data={chartData} />
+
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900">Recent Orders</h2>
             <Link href="/admin/woo-orders" className="text-indigo-600 font-bold text-sm hover:underline flex items-center gap-1">

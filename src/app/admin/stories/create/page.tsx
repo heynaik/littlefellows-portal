@@ -8,6 +8,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import clsx from "clsx";
+import { toast } from "sonner";
 
 // Types
 type Step = 1 | 2;
@@ -142,24 +143,24 @@ export default function CreateStoryPage() {
                 coverImageUrl,
             };
 
-            const saveRes = await fetch("/api/stories", {
+            const response = await fetch("/api/stories", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
 
-            if (!saveRes.ok) {
-                const err = await saveRes.json();
-                throw new Error(err.error || "Failed to save story");
+            if (response.ok) {
+                toast.success("Story created successfully!");
+                router.push('/admin/stories');
+            } else {
+                const data = await response.json();
+                toast.error(data.error || 'Failed to create story');
             }
-
-            alert("Story created successfully!");
-            router.push("/admin/stories");
 
         } catch (error) {
             console.error(error);
             const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-            alert(`Error: ${errorMessage}`);
+            toast.error(`Error: ${errorMessage}`);
         } finally {
             setIsSubmitting(false);
         }

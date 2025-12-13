@@ -7,6 +7,7 @@ import type { Product } from "@/lib/types";
 import { Search } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/button";
+import { TableSkeleton } from "@/components/ui/TableSkeleton";
 
 export default function AdminProductsPage() {
     const [products, setProducts] = useState<Product[]>([]);
@@ -109,7 +110,9 @@ export default function AdminProductsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {products.map((product) => (
+                            {loading ? (
+                                <TableSkeleton columns={6} rows={5} />
+                            ) : products.map((product) => (
                                 <tr key={product.id} className="hover:bg-slate-50">
                                     <td className="px-6 py-4">
                                         <div className="h-12 w-12 overflow-hidden rounded-lg bg-slate-100">

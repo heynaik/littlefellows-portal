@@ -145,7 +145,7 @@ export default function LoginPage() {
           }
         }
 
-        router.push(role === "admin" ? "/admin/orders" : "/vendor/orders");
+        router.push(role === "admin" ? "/admin" : "/vendor/orders");
 
       } else {
         // --- LOGIN LOGIC ---
@@ -161,7 +161,7 @@ export default function LoginPage() {
         }
 
         const role = await ensureUserDoc(user.uid, user.email);
-        router.push(role === "admin" ? "/admin/orders" : "/vendor/orders");
+        router.push(role === "admin" ? "/admin" : "/vendor/orders");
       }
     } catch (e: any) {
       console.error("Full Authentication Error:", e);

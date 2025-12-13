@@ -68,7 +68,7 @@ export default function RoleGate({
 
   if (allow && role && role !== allow) {
     // Redirect to the appropriate dashboard when possible.
-    const redirectPath = role === "admin" ? "/admin/orders" : "/vendor/orders";
+    const redirectPath = role === "admin" ? "/admin" : "/vendor/orders";
     router.replace(redirectPath);
     return <>{unauthorizedFallback}</>;
   }

@@ -74,9 +74,12 @@ export default function CustomersPage() {
         fetchHistory();
     }, [selectedCustomer]);
 
+    const [error, setError] = useState("");
+
     // Update fetchCustomers to use filterType
     async function fetchCustomersInternal() {
         setLoading(true);
+        setError("");
         try {
             const p = new URLSearchParams({
                 page: String(page),
@@ -87,13 +90,18 @@ export default function CustomersPage() {
                 min_orders: minOrders
             });
             const res = await fetch(`/api/customers?${p.toString()}`);
-            if (!res.ok) throw new Error("Failed to load customers");
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.message || `Error ${res.status}: Failed to load customers`);
+            }
             const data = await res.json();
             setCustomers(data.customers || []);
             setTotalPages(data.totalPages ? Number(data.totalPages) : 1);
             setTotalCustomers(data.total ? Number(data.total) : 0);
         } catch (err: any) {
             console.error(err);
+            setError(err.message || "Unknown error occurred");
+            setCustomers([]);
         } finally {
             setLoading(false);
         }
@@ -192,6 +200,14 @@ export default function CustomersPage() {
                         <tbody className="divide-y divide-slate-50">
                             {loading ? (
                                 <tr><td colSpan={6} className="p-16 text-center text-slate-400"><Loader2 className="animate-spin mx-auto mb-2" />Loading customers...</td></tr>
+                            ) : error ? (
+                                <tr>
+                                    <td colSpan={6} className="p-16 text-center text-red-500">
+                                        <div className="font-bold mb-1">Failed to load customers</div>
+                                        <div className="text-sm opacity-80">{error}</div>
+                                        <button onClick={() => fetchCustomersInternal()} className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg text-sm font-bold hover:bg-red-50">Try Again</button>
+                                    </td>
+                                </tr>
                             ) : customers.length === 0 ? (
                                 <tr><td colSpan={6} className="p-16 text-center text-slate-400">No customers found.</td></tr>
                             ) : customers.map(customer => (

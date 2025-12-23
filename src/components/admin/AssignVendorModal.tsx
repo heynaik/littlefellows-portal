@@ -100,6 +100,7 @@ export default function AssignVendorModal({ order, onClose, onSuccess }: AssignV
         customerEmail: order.billing.email,
         totalAmount: order.total,
         currency: order.currency,
+        coverImage: order.line_items?.[0]?.image?.src || null,
         stage: "Assigned to Vendor",
         vendorId: vendorId,
         s3Key: s3Key,

@@ -33,6 +33,11 @@ export async function GET(req: Request) {
   const key = new URL(req.url).searchParams.get('key');
   if (!key) return NextResponse.json({ message: 'Missing key' }, { status: 400 });
 
+  // Handle Public URLs (e.g. from WP or direct S3 links)
+  if (key.startsWith('http')) {
+    return NextResponse.redirect(key, { status: 302 });
+  }
+
   try {
     if (!BUCKET) throw new Error('S3 bucket environment variable is not set');
     const s3 = getS3Client();
@@ -40,14 +45,13 @@ export async function GET(req: Request) {
     const cmd = new GetObjectCommand({
       Bucket: BUCKET,
       Key: key,
-      ResponseContentType: 'application/pdf',
-      ResponseContentDisposition: 'inline'
     });
 
-    const url = await getSignedUrl(s3, cmd, { expiresIn: 60 }); // 60s
+    const url = await getSignedUrl(s3, cmd, { expiresIn: 3600 }); // 1 hour
     return NextResponse.redirect(url, { status: 302 });
   } catch (error) {
     console.error('[view-url] failed to sign url', { key, error });
-    return NextResponse.json({ message: 'Failed to generate view URL' }, { status: 500 });
+    // Don't crash, just show error in browser
+    return NextResponse.json({ message: 'Failed to access file. S3 Credentials missing or invalid.' }, { status: 500 });
   }
 }

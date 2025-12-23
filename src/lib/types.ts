@@ -28,6 +28,7 @@ export type Order = {
   orderId: string;
   bookTitle: string;
   binding: 'Soft' | 'Hard';
+  coverImage?: string;
   deadline: string;
   notes?: string;
   s3Key?: string | null;
@@ -48,6 +49,11 @@ export type Order = {
     total: string;
   }>;
   wcStatus?: string;
+  vendor_upload?: {
+    url: string;
+    name: string;
+    timestamp: number;
+  };
 };
 
 export type Product = {
@@ -89,4 +95,53 @@ export type Vendor = {
   name: string;
   contactEmail?: string;
   active?: boolean;
+};
+
+export type WooCommerceOrder = {
+  id: number;
+  number: string;
+  status: string;
+  currency: string;
+  date_created: string;
+  total: string;
+  customer_note?: string;
+  billing: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    address_1: string;
+    address_2: string;
+    city: string;
+    state: string;
+    postcode: string;
+    country: string;
+  };
+  line_items: Array<{
+    id: number;
+    name: string;
+    sku?: string;
+    quantity: number;
+    total: string;
+    meta_data: Array<{
+      id: number;
+      key: string;
+      value: any;
+      display_key: string;
+      display_value: string;
+    }>;
+    image: {
+      src: string;
+    };
+  }>;
+  meta_data: Array<{
+    id: number;
+    key: string;
+    value: any;
+  }>;
+  vendor_name?: string;
+  s3Key?: string;
+  vendor_upload?: {
+    url: string;
+  };
 };

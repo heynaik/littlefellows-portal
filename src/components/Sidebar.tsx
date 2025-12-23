@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { Gauge, LayoutGrid, Users, Settings, LogOut, Ticket, ShoppingBag, Smile, BarChart3, BookOpen } from "lucide-react";
+import { Gauge, LayoutGrid, Users, Settings, LogOut, Ticket, ShoppingBag, Smile, BarChart3, BookOpen, ClipboardCheck } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import Logo from "./Logo";
@@ -30,6 +30,7 @@ const NAV_GROUPS = [
     title: "Operations",
     items: [
       { href: "/admin/vendors", label: "Vendors", icon: Users },
+      { href: "/admin/assigned", label: "Assigned Jobs", icon: ClipboardCheck },
       { href: "/admin/invites", label: "Manage Invites", icon: Ticket },
     ]
   },

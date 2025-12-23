@@ -11,10 +11,8 @@ import {
   Package,
   PackageOpen,
   Truck,
-  CheckCircle2,
   Printer,
   MoreHorizontal,
-  RefreshCcw,
   Search
 } from "lucide-react";
 import clsx from "clsx";
@@ -50,7 +48,14 @@ export default function VendorDashboard() {
       const unsubDocs = onSnapshot(q, (snapshot) => {
         const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Order[];
         // Sort safely by createdAt desc
-        data.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        data.sort((a, b) => {
+          const getMillis = (d: any) => {
+            if (typeof d === 'number') return d;
+            if (d?.seconds) return d.seconds * 1000;
+            return 0;
+          };
+          return getMillis(b.createdAt) - getMillis(a.createdAt);
+        });
         setOrders(data);
         setLoading(false);
       }, (err) => {
@@ -82,6 +87,8 @@ export default function VendorDashboard() {
     }
   };
 
+
+
   const filteredOrders = orders.filter(o =>
     o.bookTitle.toLowerCase().includes(search.toLowerCase()) ||
     o.orderId.toLowerCase().includes(search.toLowerCase())
@@ -108,7 +115,6 @@ export default function VendorDashboard() {
               />
               <Search className="absolute left-3.5 top-3 text-slate-400" size={16} />
             </div>
-            {/* Auto-updating, no refresh needed */}
           </div>
         </div>
 
@@ -131,13 +137,14 @@ export default function VendorDashboard() {
         ) : (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left hidden md:table">
                 <thead>
                   <tr className="bg-slate-50/50 border-b border-slate-100 text-xs uppercase tracking-wider text-slate-500 font-bold">
-                    <th className="p-5 pl-6">Order Details</th>
+                    <th className="p-5 pl-6 w-[80px]"></th>
+                    <th className="p-5">Order Details</th>
                     <th className="p-5">Book Info</th>
+                    <th className="p-5">Book PDF</th>
                     <th className="p-5">Current Stage</th>
-                    <th className="p-5 text-right pr-6">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -147,9 +154,29 @@ export default function VendorDashboard() {
                     filteredOrders.map(order => (
                       <tr key={order.id} className="group hover:bg-slate-50/50 transition-colors">
                         <td className="p-5 pl-6">
+                          <div className="h-16 w-16 bg-slate-100 rounded-lg border border-slate-200 overflow-hidden flex items-center justify-center">
+                            {order.coverImage ? (
+                              <img src={order.coverImage} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-2xl">📖</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-5">
                           <div className="flex flex-col">
                             <span className="font-bold text-slate-800 text-sm">#{order.orderId}</span>
-                            <span className="text-xs text-slate-500 mt-1">{format(new Date(order.createdAt || Date.now()), 'MMM d, yyyy')}</span>
+                            <span className="text-xs text-slate-500 mt-1">
+                              {(() => {
+                                let date = new Date();
+                                const created: any = order.createdAt;
+                                if (typeof created === 'number') {
+                                  date = new Date(created);
+                                } else if (created?.seconds) {
+                                  date = new Date(created.seconds * 1000);
+                                }
+                                return format(date, 'MMM d, yyyy');
+                              })()}
+                            </span>
                             {order.notes && (
                               <span className="mt-1 inline-block px-2 py-0.5 rounded bg-yellow-50 text-yellow-700 text-[10px] font-bold border border-yellow-100 max-w-fit">
                                 NOTE: {order.notes}
@@ -159,12 +186,21 @@ export default function VendorDashboard() {
                         </td>
                         <td className="p-5">
                           <div className="font-semibold text-slate-800 text-sm">{order.bookTitle}</div>
-                          <div className={clsx(
-                            "mt-1.5 inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide border",
-                            order.binding === 'Hard' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-100 text-slate-600 border-slate-200'
-                          )}>
-                            {order.binding === 'Hard' ? 'Hardcover' : 'Softcover'}
-                          </div>
+                        </td>
+                        <td className="p-5">
+                          {order.s3Key ? (
+                            <a
+                              href={`/api/view-url?key=${encodeURIComponent(order.s3Key)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-sm font-bold transition-all shadow-sm hover:shadow"
+                            >
+                              <FileText size={16} />
+                              Download PDF
+                            </a>
+                          ) : (
+                            <span className="text-slate-400 text-xs italic">No PDF</span>
+                          )}
                         </td>
                         <td className="p-5">
                           <div className="relative inline-block w-48">
@@ -201,29 +237,102 @@ export default function VendorDashboard() {
                             </div>
                           </div>
                         </td>
-                        <td className="p-5 text-right pr-6">
-                          {order.s3Key ? (
-                            <a
-                              href={`/api/view-url?key=${encodeURIComponent(order.s3Key)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 transition-all hover:-translate-y-0.5"
-                            >
-                              <FileText size={16} />
-                              Download PDF
-                            </a>
-                          ) : (
-                            <button disabled className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 rounded-xl text-sm font-bold cursor-not-allowed">
-                              <FileText size={16} />
-                              No PDF
-                            </button>
-                          )}
-                        </td>
                       </tr>
                     ))
                   )}
                 </tbody>
               </table>
+
+              {/* MOBILE CARD VIEW */}
+              <div className="md:hidden space-y-4 p-4">
+                {filteredOrders.length === 0 ? (
+                  <div className="text-center text-slate-400 py-10">No orders match your search.</div>
+                ) : (
+                  filteredOrders.map(order => (
+                    <div key={order.id} className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+
+                      {/* Top Row: ID & Date */}
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="font-bold text-slate-900">#{order.orderId}</div>
+                          <div className="text-xs text-slate-500">
+                            {(() => {
+                              let date = new Date();
+                              const created: any = order.createdAt;
+                              if (typeof created === 'number') date = new Date(created);
+                              else if (created?.seconds) date = new Date(created.seconds * 1000);
+                              return format(date, 'MMM d, yyyy');
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Middle: Title */}
+                      <div>
+                        <div className="font-bold text-slate-800 text-sm">{order.bookTitle}</div>
+                        {order.notes && (
+                          <span className="mt-1 inline-block px-2 py-0.5 rounded bg-yellow-50 text-yellow-700 text-[10px] font-bold border border-yellow-100">
+                            NOTE: {order.notes}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Stage Select */}
+                      <div className="relative">
+                        <select
+                          value={order.stage || "Assigned to Vendor"}
+                          onChange={(e) => handleStageUpdate(order.id!, e.target.value as Stage)}
+                          disabled={!!updatingId}
+                          className={clsx(
+                            "appearance-none w-full pl-9 pr-8 py-3 rounded-xl text-sm font-bold shadow-sm border transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
+                            order.stage === 'Shipped to Admin' ? 'bg-green-50 border-green-200 text-green-700' :
+                              order.stage === 'Printing' ? 'bg-blue-50 border-blue-200 text-blue-700' :
+                                'bg-white border-slate-200 text-slate-700'
+                          )}
+                        >
+                          {VENDOR_STAGES.map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                          {updatingId === order.id ? (
+                            <Loader2 size={16} className="animate-spin text-slate-400" />
+                          ) : order.stage === 'Printing' ? (
+                            <Printer size={16} className="text-blue-500" />
+                          ) : order.stage === 'Shipped to Admin' ? (
+                            <Truck size={16} className="text-green-500" />
+                          ) : (
+                            <Package size={16} className="text-slate-400" />
+                          )}
+                        </div>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                          <MoreHorizontal size={16} />
+                        </div>
+                      </div>
+
+                      {/* Download PDF Action */}
+                      <div className="pt-2 border-t border-slate-100">
+                        {order.s3Key ? (
+                          <a
+                            href={`/api/view-url?key=${encodeURIComponent(order.s3Key)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-sm font-bold shadow-sm active:scale-[0.98] transition-all"
+                          >
+                            <FileText size={16} />
+                            Download Book PDF
+                          </a>
+                        ) : (
+                          <div className="w-full text-center py-3 text-slate-400 text-sm italic bg-slate-50 rounded-xl border border-slate-100">
+                            No PDF Available
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         )}

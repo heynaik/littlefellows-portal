@@ -44,10 +44,15 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const rawName = searchParams.get("fileName") || "upload.pdf";
     const contentType = searchParams.get("contentType") || "application/pdf";
+    const orderId = searchParams.get("orderId");
 
     const ts = Date.now();
     const safeName = rawName.replace(/\s+/g, "-");
-    const key = `orders/${ts}-${safeName}`;
+
+    // Strict namespacing by Order ID to prevent collisions
+    const key = orderId
+      ? `orders/${orderId}/${ts}-${safeName}`
+      : `orders/${ts}-${safeName}`;
 
     const command = new PutObjectCommand({
       Bucket: BUCKET,
@@ -55,7 +60,7 @@ export async function GET(req: Request) {
       ContentType: contentType,
     });
 
-    const url = await getSignedUrl(s3, command, { expiresIn: 60 }); // seconds
+    const url = await getSignedUrl(s3, command, { expiresIn: 3600 }); // 1 hour
 
     return NextResponse.json({ url, key });
   } catch (error) {

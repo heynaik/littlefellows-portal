@@ -344,7 +344,14 @@ Sweet dreams, and good night.`;
 
     const sendWhatsApp = () => {
         if (!order?.billing?.phone || !whatsappMsg) return;
-        const phone = order.billing.phone.replace(/[^0-9]/g, "");
+
+        let phone = order.billing.phone.replace(/[^0-9]/g, "");
+        // Fix for common issue: missing country code for 10-digit numbers (assume IN +91)
+        if (phone.length === 10) {
+            phone = "91" + phone;
+        } else if (phone.length === 11 && phone.startsWith("0")) {
+            phone = "91" + phone.substring(1);
+        }
 
         let finalMsg = whatsappMsg;
         if (!finalMsg.includes(`Order #${order.number}`)) {

@@ -409,30 +409,30 @@ Sweet dreams, and good night.`;
     return (
         <div className="min-h-screen bg-[#F8FAFC] pb-20">
             {/* 1. Header Section */}
-            <div className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.05)]">
+            <div className="sticky top-0 z-50 w-full border-b border-slate-200/60 bg-white/80 backdrop-blur-xl shadow-sm transition-all supports-[backdrop-filter]:bg-white/60">
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <Link
                             href="/admin/woo-orders"
-                            className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 transition-colors text-slate-500 border border-transparent hover:border-slate-200 group"
+                            className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100/50 transition-colors text-slate-500 border border-transparent hover:border-slate-200 group"
                         >
                             <ArrowLeft size={20} className="group-hover:-translate-x-0.5 transition-transform" />
                         </Link>
                         <div>
                             <div className="flex items-center gap-3">
-                                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                                <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
                                     Order #{order.number}
                                 </h1>
                                 <span className={clsx(
-                                    "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border",
+                                    "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border shadow-sm",
                                     stageColors[order.status] || "bg-slate-50 text-slate-700 border-slate-200"
                                 )}>
                                     {order.status}
                                 </span>
                             </div>
-                            <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mt-1">
+                            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mt-1">
                                 <span>{format(new Date(order.date_created), "MMM dd, yyyy • hh:mm a")}</span>
-                                <span>•</span>
+                                <span className="text-slate-300">•</span>
                                 <span>{order.billing.email}</span>
                             </div>
                         </div>
@@ -449,22 +449,22 @@ Sweet dreams, and good night.`;
                                     }
                                 }}
                                 className={clsx(
-                                    "h-11 px-5 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2",
+                                    "h-10 px-5 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2 active:scale-95",
                                     showAssignment
                                         ? "bg-slate-100 text-slate-600 hover:bg-slate-200 shadow-none border border-slate-200"
-                                        : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200 hover:shadow-indigo-300"
+                                        : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200 hover:shadow-indigo-300 ring-4 ring-indigo-50"
                                 )}
                             >
                                 {showAssignment ? <X size={18} /> : <UploadCloud size={18} />}
-                                {showAssignment ? "Cancel Assignment" : "Assign Vendor"}
+                                {showAssignment ? "Cancel" : "Assign Vendor"}
                             </button>
                         )}
                         <button
                             onClick={handleDownloadZip}
-                            className="h-11 px-5 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl hover:bg-slate-50 hover:border-slate-300 shadow-sm transition-all flex items-center gap-2"
+                            className="h-10 px-5 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl hover:bg-slate-50 hover:border-slate-300 hover:text-indigo-600 shadow-sm transition-all flex items-center gap-2 active:scale-95"
                         >
                             <Download size={18} />
-                            <span className="hidden sm:inline">Download Assets</span>
+                            <span className="hidden sm:inline">Assets</span>
                         </button>
                     </div>
                 </div>

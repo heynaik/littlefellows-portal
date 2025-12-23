@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import clsx from "clsx";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAuthUser } from "@/lib/auth";
 import { WooCommerceOrder } from "@/lib/types";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp, setDoc, onSnapshot } from "firebase/firestore";
@@ -108,6 +109,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     // Unwrap params
     const { id } = use(params);
     const router = useRouter();
+    const { user } = useAuthUser();
 
     const [order, setOrder] = useState<WooCommerceOrder | null>(null);
     const [loading, setLoading] = useState(true);
@@ -168,7 +170,9 @@ Sweet dreams, and good night.`;
     ];
 
     useEffect(() => {
-        fetchOrder();
+        if (user) {
+            fetchOrder();
+        }
 
         // Real-time listener: Sync stage/status from Firestore
         const orderIdNumber = parseInt(id);
@@ -190,12 +194,17 @@ Sweet dreams, and good night.`;
         });
 
         return () => unsubscribe();
-    }, [id]);
+    }, [id, user]);
 
     const fetchOrder = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`/api/woo-orders/${id}`);
+            const token = user ? await user.getIdToken() : "";
+            const res = await fetch(`/api/woo-orders/${id}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
             if (!res.ok) throw new Error("Failed to load order");
             const data = await res.json();
             setOrder(data);

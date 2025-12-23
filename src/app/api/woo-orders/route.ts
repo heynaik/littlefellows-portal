@@ -57,7 +57,7 @@ export async function GET(req: Request) {
                     chunks.push(wcIds.slice(i, i + chunkSize));
                 }
 
-                for (const chunk of chunks) {
+                await Promise.all(chunks.map(async (chunk) => {
                     const snap = await adminDb.collection("orders").where("wcId", "in", chunk).get();
 
                     // First pass: Collect all vendor IDs
@@ -73,13 +73,7 @@ export async function GET(req: Request) {
                     // Fetch Vendors if any
                     const vendorMap: Record<string, string> = {};
                     if (vendorIds.size > 0) {
-                        // Firestore IN limited to 10/30. Safe to fetch one by one or batch if small list?
-                        // "users" collection usually isn't huge for vendors.
-                        // Let's do a simple loop or one IN query if size < 10.
-                        // Assuming small number of vendors active.
                         const vIds = Array.from(vendorIds);
-                        // Since we are inside a chunk loop, doing another chunked query is safer.
-                        // Or just Promise.all get() since it's by ID (fast).
                         await Promise.all(vIds.map(async (vid) => {
                             const vDoc = await adminDb.collection("users").doc(vid).get();
                             if (vDoc.exists) {
@@ -92,7 +86,6 @@ export async function GET(req: Request) {
                     internalOrders.forEach((data) => {
                         const match = orders.find((o: any) => o.id === data.wcId);
                         if (match) {
-                            // Use the actual internal stage as the status
                             match.status = data.stage || "Assigned to Vendor";
                             match.internal_stage = data.stage;
                             match.s3Key = data.s3Key;
@@ -101,7 +94,7 @@ export async function GET(req: Request) {
                             }
                         }
                     });
-                }
+                }));
 
             } catch (dbError) {
                 console.error("[woo-orders.GET] Failed to sync internal status:", dbError);

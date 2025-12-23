@@ -337,10 +337,20 @@ Sweet dreams, and good night.`;
         }
     };
 
+    const setMsgWithOrderId = (text: string) => {
+        if (!order) return setWhatsappMsg(text);
+        setWhatsappMsg(`${text}\n\nOrder #${order.number}`);
+    };
+
     const sendWhatsApp = () => {
         if (!order?.billing?.phone || !whatsappMsg) return;
         const phone = order.billing.phone.replace(/[^0-9]/g, "");
-        const finalMsg = `${whatsappMsg}\n\nOrder #${order.number}`;
+
+        let finalMsg = whatsappMsg;
+        if (!finalMsg.includes(`Order #${order.number}`)) {
+            finalMsg = `${whatsappMsg}\n\nOrder #${order.number}`;
+        }
+
         const url = `https://wa.me/${phone}?text=${encodeURIComponent(finalMsg)}`;
         window.open(url, "_blank");
     };
@@ -755,7 +765,7 @@ Sweet dreams, and good night.`;
                                 {whatsappTemplates.map((t, i) => (
                                     <button
                                         key={i}
-                                        onClick={() => setWhatsappMsg(t.text)}
+                                        onClick={() => setMsgWithOrderId(t.text)}
                                         className={clsx(
                                             "px-2 py-2.5 rounded-xl border text-[10px] font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm hover:shadow-md",
                                             t.special

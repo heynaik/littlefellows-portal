@@ -340,7 +340,8 @@ Sweet dreams, and good night.`;
     const sendWhatsApp = () => {
         if (!order?.billing?.phone || !whatsappMsg) return;
         const phone = order.billing.phone.replace(/[^0-9]/g, "");
-        const url = `https://wa.me/${phone}?text=${encodeURIComponent(whatsappMsg)}`;
+        const finalMsg = `${whatsappMsg}\n\nOrder #${order.number}`;
+        const url = `https://wa.me/${phone}?text=${encodeURIComponent(finalMsg)}`;
         window.open(url, "_blank");
     };
 

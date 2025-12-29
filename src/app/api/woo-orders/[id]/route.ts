@@ -132,3 +132,50 @@ export async function PUT(
         }, { status: 500 });
     }
 }
+export async function DELETE(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const { id } = await params;
+
+    // Auth Check
+    const guard = await requireUser(req);
+    if (guard instanceof Response) return guard;
+    if (guard.role !== 'admin') {
+        return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
+    try {
+        // 1. Delete in WooCommerce (force=false moves to trash)
+        const response = await wooCommerceClient.delete(`orders/${id}`, { force: false });
+
+        // 2. Update Internal DB
+        if (isFirebaseAdminInitialized) {
+            try {
+                const { adminDb } = await import("@/lib/server/firebaseAdmin");
+                const snap = await adminDb.collection("orders").where("wcId", "==", Number(id)).get();
+                if (!snap.empty) {
+                    await snap.docs[0].ref.update({
+                        stage: "Trash",
+                        status: "trash" // Helper for internal use if needed
+                    });
+                }
+            } catch (dbError) {
+                console.error("[woo-orders.DELETE] Failed to sync internal DB:", dbError);
+            }
+        }
+
+        return NextResponse.json({
+            success: true,
+            message: "Order moved to trash",
+            data: response.data
+        });
+
+    } catch (error: any) {
+        console.error(`[woo-orders.DELETE ${id}]`, error?.response?.data || error);
+        return NextResponse.json({
+            message: "Failed to delete order",
+            error: error?.message
+        }, { status: 500 });
+    }
+}

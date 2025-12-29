@@ -16,6 +16,9 @@ export async function GET(req: Request) {
         const per_page = searchParams.get("per_page") || "20";
         const search = searchParams.get("search") || "";
         const status = searchParams.get("status") || "any";
+        const after = searchParams.get("after");
+        const before = searchParams.get("before");
+        const customer = searchParams.get("customer");
 
         const params: any = {
             page,
@@ -26,6 +29,9 @@ export async function GET(req: Request) {
 
         if (search) params.search = search;
         if (status !== "any") params.status = status;
+        if (after) params.after = after;
+        if (before) params.before = before;
+        if (customer) params.customer = parseInt(customer);
 
         const response = await wooCommerceClient.get("orders", params);
         const orders = response.data;

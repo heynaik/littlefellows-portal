@@ -466,6 +466,31 @@ Sweet dreams, and good night.`;
                             <Download size={18} />
                             <span className="hidden sm:inline">Assets</span>
                         </button>
+
+                        <button
+                            onClick={async () => {
+                                if (!confirm("Are you sure you want to move this order to Trash?")) return;
+                                try {
+                                    setLoading(true);
+                                    const token = user ? await user.getIdToken() : "";
+                                    const res = await fetch(`/api/woo-orders/${id}`, {
+                                        method: 'DELETE',
+                                        headers: { Authorization: `Bearer ${token}` }
+                                    });
+                                    if (!res.ok) throw new Error("Failed to delete");
+                                    toast.success("Order moved to trash");
+                                    router.push("/admin/woo-orders");
+                                } catch (e) {
+                                    console.error(e);
+                                    toast.error("Failed to delete order");
+                                    setLoading(false);
+                                }
+                            }}
+                            className="h-10 px-3 bg-red-50 border border-red-100 text-red-600 font-bold text-sm rounded-xl hover:bg-red-100 hover:border-red-200 shadow-sm transition-all flex items-center gap-2 active:scale-95"
+                            title="Move to Trash"
+                        >
+                            <Trash2 size={18} />
+                        </button>
                     </div>
                 </div>
             </div>

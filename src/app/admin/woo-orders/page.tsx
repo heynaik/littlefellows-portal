@@ -37,6 +37,9 @@ export default function WooOrdersPage() {
     const [statusFilter, setStatusFilter] = useState("any");
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [after, setAfter] = useState<string | undefined>(undefined);
+    const [before, setBefore] = useState<string | undefined>(undefined);
+    const [customer, setCustomer] = useState<string | undefined>(undefined);
 
     const { user } = useAuthUser();
     const router = useRouter();
@@ -45,12 +48,18 @@ export default function WooOrdersPage() {
     async function fetchOrders() {
         setLoading(true);
         try {
-            const p = new URLSearchParams({
+            const queryParams: any = {
                 page: String(page),
                 per_page: "20",
                 search: search,
                 status: statusFilter,
-            });
+            };
+
+            if (after) queryParams.after = after;
+            if (before) queryParams.before = before;
+            if (customer) queryParams.customer = customer;
+
+            const p = new URLSearchParams(queryParams);
             const token = user ? await user.getIdToken() : "";
             const res = await fetch(`/api/woo-orders?${p.toString()}`, {
                 headers: {
@@ -72,7 +81,7 @@ export default function WooOrdersPage() {
         if (user) {
             fetchOrders();
         }
-    }, [page, search, statusFilter, user]);
+    }, [page, search, statusFilter, user, after, before, customer]);
 
     // REAL-TIME LISTENER: Merge Firestore updates (stage, assignments) into local state
     useEffect(() => {
@@ -139,48 +148,108 @@ export default function WooOrdersPage() {
                 title="Incoming Orders"
                 description="Manage and personalize your incoming orders."
             >
-                <div className="flex gap-3 relative">
-                    <div className="relative group">
-                        <input
-                            className="pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white shadow-sm focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 focus:outline-none transition-all w-64 text-sm font-medium"
-                            placeholder="Search by Order # or Name..."
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && handleSearch(e)}
-                        />
-                        <Search className="absolute left-3.5 top-3 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={16} />
+                <div className="flex flex-col gap-4 w-full">
+                    {/* Status Tabs */}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-600">
+                        {["any", "processing", "pending", "on-hold", "completed", "cancelled", "refunded", "failed", "trash"].map((s) => (
+                            <button
+                                key={s}
+                                onClick={() => { setStatusFilter(s); setPage(1); }}
+                                className={clsx(
+                                    "hover:text-indigo-600 transition-colors capitalize",
+                                    statusFilter === s ? "font-bold text-indigo-700" : "font-normal"
+                                )}
+                            >
+                                {s === 'any' ? 'All' : s.replace('-', ' ')}
+                            </button>
+                        ))}
                     </div>
 
-                    <select
-                        className="pl-4 pr-8 py-2.5 rounded-xl border border-slate-200 bg-white shadow-sm focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 focus:outline-none transition-all text-sm font-medium text-slate-600 appearance-none cursor-pointer hover:bg-slate-50"
-                        value={statusFilter}
-                        onChange={(e) => {
-                            setStatusFilter(e.target.value);
-                            setPage(1);
-                        }}
-                    >
-                        <option value="any">All Statuses</option>
-                        <option value="processing">Processing</option>
-                        <option value="pending">Pending</option>
-                        <option value="on-hold">On Hold</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                        <option value="refunded">Refunded</option>
-                        <option value="failed">Failed</option>
-                        <option value="trash">Trash</option>
-                    </select>
+                    <div className="flex flex-wrap items-center gap-3">
+                        {/* Bulk Actions (Visual Only for now) */}
+                        <div className="flex items-center gap-2">
+                            <select className="pl-3 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+                                <option>Bulk actions</option>
+                                <option>Move to trash</option>
+                            </select>
+                            <button className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm hover:text-indigo-600 hover:border-indigo-300 transition-all">
+                                Apply
+                            </button>
+                        </div>
 
-                    <button
-                        onClick={() => {
-                            exportToCSV(orders, `orders-export-${format(new Date(), 'yyyy-MM-dd')}`);
-                            toast.success("Order export started.");
-                        }}
-                        className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 font-bold py-2.5 px-4 rounded-xl shadow-sm transition-all h-[42px]"
-                        title="Export Orders to CSV"
-                    >
-                        <FileText size={18} />
-                        <span className="hidden sm:inline">Export</span>
-                    </button>
+                        {/* Date Filter */}
+                        <select
+                            className="pl-3 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/10"
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === 'all') {
+                                    setAfter(undefined);
+                                    setBefore(undefined);
+                                } else {
+                                    // val is YYYY-MM-01
+                                    const start = new Date(val);
+                                    const end = new Date(start.getFullYear(), start.getMonth() + 1, 0); // last day of month
+                                    setAfter(start.toISOString());
+                                    setBefore(end.toISOString());
+                                }
+                                setPage(1);
+                            }}
+                        >
+                            <option value="all">All dates</option>
+                            {Array.from({ length: 12 }).map((_, i) => {
+                                const d = new Date();
+                                d.setMonth(d.getMonth() - i);
+                                const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+                                const label = format(d, 'MMMM yyyy');
+                                return <option key={val} value={val}>{label}</option>;
+                            })}
+                        </select>
+
+                        {/* Customer Filter */}
+                        <input
+                            placeholder="Filter by customer ID..."
+                            className="pl-3 pr-4 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/10 w-48"
+                            onChange={(e) => {
+                                setCustomer(e.target.value);
+                                setPage(1);
+                            }}
+                        />
+                        <button className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm hover:text-indigo-600 hover:border-indigo-300 transition-all">
+                            Filter
+                        </button>
+
+                        <div className="flex-1" />
+
+                        {/* Search */}
+                        <div className="relative group">
+                            <input
+                                className="pl-9 pr-4 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/10 w-64 transition-all"
+                                placeholder="Search orders..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleSearch(e)}
+                            />
+                            <Search className="absolute left-3 top-2.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={14} />
+                        </div>
+                        <button
+                            onClick={handleSearch}
+                            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm hover:text-indigo-600 hover:border-indigo-300 transition-all"
+                        >
+                            Search
+                        </button>
+
+                        {/* Export */}
+                        <button
+                            onClick={() => {
+                                exportToCSV(orders, `orders-export-${format(new Date(), 'yyyy-MM-dd')}`);
+                                toast.success("Order export started.");
+                            }}
+                            className="p-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:text-indigo-600 hover:border-indigo-300 transition-all"
+                            title="Export to CSV"
+                        >
+                            <Download size={18} />
+                        </button>
+                    </div>
                 </div>
             </PageHeader >
 
@@ -344,6 +413,31 @@ export default function WooOrdersPage() {
                     </table>
                 </div>
             </div >
+
+            {/* Pagination Footer */}
+            <div className="flex items-center justify-between px-2">
+                <div className="text-sm text-slate-500 font-medium">
+                    Page {page} of {totalPages}
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={page === 1 || loading}
+                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 font-medium text-sm hover:bg-slate-50 hover:text-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex items-center gap-2"
+                    >
+                        <ChevronLeft size={16} />
+                        Previous
+                    </button>
+                    <button
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        disabled={page >= totalPages || loading}
+                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 font-medium text-sm hover:bg-slate-50 hover:text-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex items-center gap-2"
+                    >
+                        Next
+                        <ChevronRight size={16} />
+                    </button>
+                </div>
+            </div>
 
 
 
